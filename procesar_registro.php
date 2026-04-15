@@ -5,6 +5,10 @@ require_once 'conexion/conexion.php';
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
     // Recibir y limpiar los datos
     $codigo = trim($_POST['codigo_usuario']);
+    
+    // CAPTURAMOS EL TELÉFONO (Nuevo)
+    $telefono = trim($_POST['telefono']); 
+    
     // Encriptamos la contraseña inmediatamente por seguridad
     $password_hash = password_hash(trim($_POST['password']), PASSWORD_DEFAULT);
     
@@ -31,13 +35,14 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 exit();
             }
 
-            // 2. Si no existe, procedemos a insertar el nuevo usuario
-            // El rol por defecto será 'Coordinador' y el estado 'Pendiente' según la base de datos
-            $sql = "INSERT INTO usuarios (codigo_usuario, password, preg_seguridad_1, resp_seguridad_1, preg_seguridad_2, resp_seguridad_2, preg_seguridad_3, resp_seguridad_3) 
-                    VALUES (:codigo, :password, :preg1, :resp1, :preg2, :resp2, :preg3, :resp3)";
+            // 2. Insertar el nuevo usuario incluyendo el campo 'telefono'
+            // IMPORTANTE: Asegúrate de haber ejecutado el ALTER TABLE en tu DB antes de probar
+            $sql = "INSERT INTO usuarios (codigo_usuario, telefono, password, preg_seguridad_1, resp_seguridad_1, preg_seguridad_2, resp_seguridad_2, preg_seguridad_3, resp_seguridad_3) 
+                    VALUES (:codigo, :telefono, :password, :preg1, :resp1, :preg2, :resp2, :preg3, :resp3)";
             
             $stmt = $conn->prepare($sql);
             $stmt->bindParam(':codigo', $codigo);
+            $stmt->bindParam(':telefono', $telefono); // Enlazamos el teléfono
             $stmt->bindParam(':password', $password_hash);
             $stmt->bindParam(':preg1', $preg1);
             $stmt->bindParam(':resp1', $resp1);
@@ -47,7 +52,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             $stmt->bindParam(':resp3', $resp3);
 
             if ($stmt->execute()) {
-                echo "<script>alert('Registro exitoso. Tu cuenta está en estado Pendiente hasta que un Administrador la apruebe.'); window.location.href='index.php';</script>";
+                echo "<script>alert('Registro exitoso. Tu cuenta está en estado Pendiente hasta que un Administrador la apruebe por WhatsApp.'); window.location.href='index.php';</script>";
             } else {
                 echo "<script>alert('Hubo un error al registrar la cuenta. Intenta de nuevo.'); window.location.href='registro.php';</script>";
             }

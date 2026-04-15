@@ -34,7 +34,6 @@ if (!$cong_objetivo) {
 
 // -------------------------------------------------------------------------
 // 🔴 REGLA 5: Verificamos si esta congregación ya prestó 2 oradores este fin de semana
-// Usamos YEARWEEK() que agrupa los días por semana (Lunes a Domingo)
 // -------------------------------------------------------------------------
 $sql_cupo = "SELECT COUNT(DISTINCT s.orador_id) FROM solicitudes s
              INNER JOIN oradores o ON s.orador_id = o.id
@@ -45,7 +44,6 @@ $stmt_cupo = $conn->prepare($sql_cupo);
 $stmt_cupo->execute([':target_id' => $congregacion_objetivo_id, ':fecha' => $fecha_buscada]);
 $oradores_fuera_este_finde = $stmt_cupo->fetchColumn();
 
-// Si ya hay 2 oradores fuera, activamos el bloqueo
 $bloqueo_regla_5 = ($oradores_fuera_este_finde >= 2);
 $lista_oradores = [];
 
@@ -53,17 +51,18 @@ $lista_oradores = [];
 if (!$bloqueo_regla_5) {
     
     // -------------------------------------------------------------------------
-    // CONSULTA MAESTRA (Aplica Reglas 2, 3 y 4)
+    // CONSULTA MAESTRA (Con Títulos de Catálogo)
     // -------------------------------------------------------------------------
     $sql_oradores = "
         SELECT o.id AS orador_id, o.nombre, o.apellido, o.espiritualidad,
-               d.numero_discurso
+               d.numero_discurso, cat.tema
         FROM oradores o
         INNER JOIN discursos d ON o.id = d.orador_id
+        LEFT JOIN catalogo_discursos cat ON d.numero_discurso = cat.numero
         WHERE o.congregacion_id = :target_id
         AND o.estado = 'Activo'
 
-        -- 🟠 REGLA 2: El ORADOR no ha dado discurso en mi congregación en 90 días (6 meses)
+        -- Regla 2: El ORADOR no ha visitado en 6 meses
         AND o.id NOT IN (
             SELECT orador_id FROM solicitudes 
             WHERE congregacion_solicitante_id = :mi_cong_id 
@@ -71,7 +70,7 @@ if (!$bloqueo_regla_5) {
             AND ABS(DATEDIFF(fecha, :fecha)) <= 180
         )
 
-        -- 🟠 REGLA 3: EL NÚMERO DE BOSQUEJO no se ha dado en mi congregación en 90 días (6 meses)
+        -- Regla 3: El BOSQUEJO no se ha dado en 6 meses
         AND d.numero_discurso NOT IN (
             SELECT numero_discurso FROM solicitudes 
             WHERE congregacion_solicitante_id = :mi_cong_id 
@@ -79,7 +78,7 @@ if (!$bloqueo_regla_5) {
             AND ABS(DATEDIFF(fecha, :fecha)) <= 180
         )
 
-        -- 🔴 REGLA 4: Un orador no puede salir más de 1 vez al mes (Mismo mes y año)
+        -- Regla 4: No puede salir más de 1 vez al mes
         AND o.id NOT IN (
             SELECT orador_id FROM solicitudes 
             WHERE estado IN ('Aprobado', 'Pendiente')
@@ -97,7 +96,7 @@ if (!$bloqueo_regla_5) {
     ]);
     $resultados = $stmt_oradores->fetchAll(PDO::FETCH_ASSOC);
 
-    // Agrupar los resultados
+    // Agrupar los resultados manteniendo el tema del discurso
     foreach ($resultados as $row) {
         $oid = $row['orador_id'];
         if (!isset($lista_oradores[$oid])) {
@@ -108,7 +107,10 @@ if (!$bloqueo_regla_5) {
                 'discursos' => []
             ];
         }
-        $lista_oradores[$oid]['discursos'][] = $row['numero_discurso'];
+        $lista_oradores[$oid]['discursos'][] = [
+            'numero' => $row['numero_discurso'],
+            'tema' => $row['tema'] ?? 'Sin título'
+        ];
     }
 }
 
@@ -119,78 +121,116 @@ $fecha_formateada = date("d/m/Y", strtotime($fecha_buscada));
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Oradores Disponibles</title>
-    <link rel="stylesheet" href="css/style.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Solicitar a <?php echo htmlspecialchars($cong_objetivo['nombre']); ?></title>
     <style>
-        .tarjeta-orador { border: 1px solid #ddd; padding: 15px; margin-bottom: 15px; border-radius: 8px; background-color: #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
-        .tarjeta-orador h3 { margin-top: 0; color: #2c3e50; margin-bottom: 5px; }
-        .etiqueta-espir { display: inline-block; background-color: #ecf0f1; padding: 3px 8px; border-radius: 4px; font-size: 0.85em; color: #7f8c8d; margin-bottom: 10px; }
-        .form-solicitud { display: flex; gap: 10px; align-items: center; margin-top: 10px; background-color: #f9f9f9; padding: 10px; border-radius: 6px; }
-        .select-discurso { padding: 8px; border: 1px solid #ccc; border-radius: 4px; flex-grow: 1; }
-        .btn-pedir { background-color: #27ae60; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; font-weight: bold; }
-        .btn-pedir:hover { background-color: #219653; }
-        .alerta-bloqueo { background-color: #fdeded; border-left: 5px solid #e74c3c; padding: 20px; border-radius: 4px; text-align: center; margin-top: 20px;}
+        body { font-family: 'Segoe UI', Tahoma, sans-serif; background: #ecf0f1; margin: 0; color: #333; }
+        
+        .header { background: #2c3e50; color: white; padding: 25px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .header h1 { margin: 0; font-size: 1.6em; }
+        .header p { margin: 5px 0 10px 0; color: #bdc3c7; }
+        .header a { color: #3498db; text-decoration: none; font-weight: bold; font-size: 0.95em; }
+        .header a:hover { text-decoration: underline; }
+
+        .container { max-width: 800px; margin: 30px auto; padding: 0 15px; }
+
+        .tarjeta-orador { background: white; border-radius: 10px; padding: 20px; margin-bottom: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); border: 1px solid #eaeaea; transition: transform 0.2s; }
+        .tarjeta-orador:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,0,0,0.08); }
+        
+        .orador-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #f0f0f0; padding-bottom: 15px; margin-bottom: 15px; }
+        .orador-header h3 { margin: 0; color: #2c3e50; font-size: 1.3em; }
+        .etiqueta-espir { background: #e8f4f8; color: #2980b9; padding: 4px 10px; border-radius: 20px; font-size: 0.8em; font-weight: bold; border: 1px solid #d6eaf8; }
+        
+        .form-solicitud { display: flex; gap: 15px; align-items: stretch; background: #fdfdfd; padding: 15px; border-radius: 8px; border: 1px dashed #ccc; }
+        .select-discurso { flex-grow: 1; padding: 10px; border: 1px solid #bdc3c7; border-radius: 6px; font-size: 0.95em; background: #fff; outline: none; }
+        .select-discurso:focus { border-color: #3498db; box-shadow: 0 0 5px rgba(52, 152, 219, 0.3); }
+        
+        .btn-pedir { background: #27ae60; color: white; border: none; padding: 0 20px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 1em; transition: 0.3s; white-space: nowrap; }
+        .btn-pedir:hover { background: #219150; }
+
+        .alerta-bloqueo { background: #fdeded; border-left: 5px solid #e74c3c; padding: 25px; border-radius: 8px; text-align: center; margin-top: 20px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
+        .btn-ver { background: #3498db; color: white; padding: 12px 25px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: bold; transition: 0.3s; }
+        .btn-ver:hover { background: #2980b9; }
+        
+        .info-box { background: #e8f4f8; border-left: 4px solid #3498db; padding: 15px; margin-bottom: 25px; border-radius: 4px; font-size: 0.9em; color: #2c3e50; line-height: 1.5; }
     </style>
 </head>
-<body style="background-color: #f4f6f7;">
-    <header style="background-color: #2c3e50;">
-        <h1>Oradores Disponibles</h1>
-        <p>De: <strong><?php echo htmlspecialchars($cong_objetivo['nombre']); ?></strong> | Para el: <strong><?php echo $fecha_formateada; ?></strong></p>
-        <p><a href="buscar_arreglos.php?fecha=<?php echo $fecha_buscada; ?>" style="color: white; text-decoration: underline;">Volver a Congregaciones</a></p>
+<body>
+
+    <header class="header">
+        <h1>Buscar Orador</h1>
+        <p>Congregación: <strong><?php echo htmlspecialchars($cong_objetivo['nombre']); ?></strong> | Fecha: <strong><?php echo $fecha_formateada; ?></strong></p>
+        <a href="buscar_arreglos.php?fecha=<?php echo $fecha_buscada; ?>">⬅ Volver al Listado de Congregaciones</a>
     </header>
 
-    <main style="padding: 20px;">
-        <div class="admin-container" style="max-width: 800px; margin: 0 auto;">
+    <div class="container">
 
-            <?php if ($bloqueo_regla_5): ?>
-                <div class="alerta-bloqueo">
-                    <h2 style="color: #c0392b; margin-top: 0;">🛑 Límite de Congregación Alcanzado</h2>
-                    <p style="font-size: 1.1em; color: #333;">La congregación <strong><?php echo htmlspecialchars($cong_objetivo['nombre']); ?></strong> ya tiene a <strong>2 oradores</strong> programados para salir este fin de semana.</p>
-                    <p style="color: #666; font-size: 0.9em;">Por normas organizativas, no se pueden solicitar más hermanos de esta congregación para la misma fecha.</p>
-                    <br>
-                    <a href="buscar_arreglos.php?fecha=<?php echo $fecha_buscada; ?>" class="btn-ver" style="background-color: #3498db; color: white; padding: 10px 20px; text-decoration: none; border-radius: 4px; display: inline-block;">Buscar en otra congregación</a>
-                </div>
+        <?php if ($bloqueo_regla_5): ?>
+            <div class="alerta-bloqueo">
+                <h2 style="color: #c0392b; margin-top: 0;">🛑 Límite Alcanzado</h2>
+                <p style="font-size: 1.1em; color: #333; margin-bottom: 5px;">La congregación <strong><?php echo htmlspecialchars($cong_objetivo['nombre']); ?></strong> ya tiene a <strong>2 oradores</strong> comprometidos para este fin de semana.</p>
+                <p style="color: #7f8c8d; font-size: 0.9em;">Por normas organizativas, no se pueden solicitar más hermanos de esta lista para la fecha seleccionada.</p>
+                <br>
+                <a href="buscar_arreglos.php?fecha=<?php echo $fecha_buscada; ?>" class="btn-ver">Buscar en otra congregación</a>
+            </div>
 
-            <?php else: ?>
-                <div style="background-color: #e8f4f8; border-left: 4px solid #3498db; padding: 10px 15px; margin-bottom: 20px; font-size: 0.9em; color: #2c3e50;">
-                    ℹ️ <strong>Filtros Activos:</strong> Se han ocultado hermanos/bosquejos que visitaron tu congregación en los últimos 3 meses, y hermanos que ya tienen otra asignación este mes.
-                </div>
+        <?php else: ?>
+            <div class="info-box">
+                <strong>ℹ️ Filtros Inteligentes Activos:</strong><br>
+                El sistema ha ocultado automáticamente a los hermanos que ya te visitaron o que ya dieron sus bosquejos en tu congregación durante los últimos 6 meses. Tampoco verás a los hermanos que ya tienen otra salida programada para este mes.
+            </div>
 
-                <?php if (count($lista_oradores) > 0): ?>
-                    <?php foreach ($lista_oradores as $id => $orador): ?>
-                        <div class="tarjeta-orador">
-                            <h3><?php echo htmlspecialchars($orador['nombre'] . ' ' . $orador['apellido']); ?></h3>
+            <?php if (count($lista_oradores) > 0): ?>
+                <?php foreach ($lista_oradores as $id => $orador): ?>
+                    <div class="tarjeta-orador">
+                        <div class="orador-header">
+                            <h3>👤 <?php echo htmlspecialchars($orador['nombre'] . ' ' . $orador['apellido']); ?></h3>
                             <span class="etiqueta-espir"><?php echo htmlspecialchars($orador['espiritualidad']); ?></span>
-                            
-                            <form action="procesar_solicitud.php" method="POST" class="form-solicitud">
-                                <input type="hidden" name="orador_id" value="<?php echo $id; ?>">
-                                <input type="hidden" name="fecha" value="<?php echo $fecha_buscada; ?>">
-                                <input type="hidden" name="mi_cong_id" value="<?php echo $mi_cong_id; ?>">
-                                <input type="hidden" name="hora" value="09:00:00">
-                                
-                                <label for="discurso_<?php echo $id; ?>" style="font-weight: bold; font-size: 0.9em;">Elegir Bosquejo:</label>
-                                <select name="numero_discurso" id="discurso_<?php echo $id; ?>" class="select-discurso" required>
-                                    <option value="" disabled selected>-- Seleccione un bosquejo --</option>
-                                    <?php foreach ($orador['discursos'] as $num): ?>
-                                        <option value="<?php echo $num; ?>">Bosquejo Nº <?php echo $num; ?></option>
-                                    <?php endforeach; ?>
-                                </select>
-                                
-                                <button type="submit" class="btn-pedir">Agendar Orador</button>
-                            </form>
                         </div>
-                    <?php endforeach; ?>
-                <?php else: ?>
-                    <div class="mensaje-vacio" style="text-align: center; padding: 40px; background-color: white; border-radius: 8px; border: 1px dashed #ccc;">
-                        <h2 style="color: #e74c3c;">Sin disponibilidad</h2>
-                        <p>No hay oradores en esta congregación que cumplan con la regla de los 3 meses o que tengan el mes libre.</p>
-                        <a href="buscar_arreglos.php?fecha=<?php echo $fecha_buscada; ?>" class="btn-ver" style="display: inline-block; margin-top: 15px; background-color: #3498db; color: white; padding: 10px 20px; text-decoration: none; border-radius: 4px;">Buscar en otra congregación</a>
+                        
+                        <form action="procesar_solicitud.php" method="POST" class="form-solicitud">
+                            <input type="hidden" name="orador_id" value="<?php echo $id; ?>">
+                            <input type="hidden" name="fecha" value="<?php echo $fecha_buscada; ?>">
+                            <input type="hidden" name="mi_cong_id" value="<?php echo $mi_cong_id; ?>">
+                            <input type="hidden" name="hora" value="09:00:00">
+                            
+                            <select name="numero_discurso" class="select-discurso" required>
+                                <option value="" disabled selected>-- Seleccione un bosquejo preparado --</option>
+                                <?php foreach ($orador['discursos'] as $d): ?>
+                                    <?php 
+                                        $num = $d['numero'];
+                                        $tema = htmlspecialchars($d['tema']);
+                                        
+                                        // Formateo visual para discursos especiales
+                                        if ($num == 501) {
+                                            $texto = "🌟 ESPECIAL: " . $tema;
+                                            $estilo = "font-weight: bold; color: #d35400;";
+                                        } elseif ($num == 502) {
+                                            $texto = "🍷 CONMEMORACIÓN: " . $tema;
+                                            $estilo = "font-weight: bold; color: #8e44ad;";
+                                        } else {
+                                            $texto = "Nº " . $num . " - " . $tema;
+                                            $estilo = "";
+                                        }
+                                    ?>
+                                    <option value="<?php echo $num; ?>" style="<?php echo $estilo; ?>"><?php echo $texto; ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                            
+                            <button type="submit" class="btn-pedir">✉️ Enviar Solicitud</button>
+                        </form>
                     </div>
-                <?php endif; ?>
-
+                <?php endforeach; ?>
+            <?php else: ?>
+                <div style="text-align: center; padding: 50px 20px; background: white; border-radius: 10px; border: 1px dashed #bdc3c7;">
+                    <h2 style="color: #e74c3c; margin-top: 0;">No hay oradores disponibles</h2>
+                    <p style="color: #7f8c8d;">Todos los hermanos de esta congregación están restringidos por las reglas de tiempo (6 meses) o ya tienen asignaciones este mes.</p>
+                    <a href="buscar_arreglos.php?fecha=<?php echo $fecha_buscada; ?>" class="btn-ver" style="margin-top: 15px;">Intentar en otra congregación</a>
+                </div>
             <?php endif; ?>
 
-        </div>
-    </main>
+        <?php endif; ?>
+
+    </div>
 </body>
 </html>

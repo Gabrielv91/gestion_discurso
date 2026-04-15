@@ -13,11 +13,12 @@ $stmt = $conn->prepare($sql_mi_cong);
 $stmt->execute([':uid' => $usuario_id]);
 $mi_cong_id = $stmt->fetchColumn();
 
-// 2. Traer las solicitudes (incluyendo las rechazadas)
-// NOTA: Agregamos o.congregacion_id a la consulta
-$sql = "SELECT s.id, s.fecha, s.estado, o.nombre, o.apellido, s.numero_discurso, o.congregacion_id
+// 2. Traer las solicitudes + Datos del Orador + Nombre de su Congregación
+// NOTA: Agregamos el JOIN con congregaciones (c) para traer el nombre
+$sql = "SELECT s.id, s.fecha, s.estado, o.nombre, o.apellido, s.numero_discurso, o.congregacion_id, c.nombre AS nombre_congregacion
         FROM solicitudes s
         INNER JOIN oradores o ON s.orador_id = o.id
+        LEFT JOIN congregaciones c ON o.congregacion_id = c.id
         WHERE s.congregacion_solicitante_id = :mi_id";
 
 $stmt = $conn->prepare($sql);
@@ -26,7 +27,7 @@ $resultados = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 $eventos = [];
 foreach($resultados as $row) {
-    // Definimos los colores según el estado (AHORA CON ROJO)
+    // Definimos los colores según el estado
     if ($row['estado'] == 'Pendiente') {
         $colorFondo = '#f39c12'; // Naranja
     } elseif ($row['estado'] == 'Aprobado') {
@@ -41,17 +42,24 @@ foreach($resultados as $row) {
 
     // Detectar si el orador es de mi misma congregación
     $es_local = ($row['congregacion_id'] == $mi_cong_id) ? true : false;
+    
+    // Si es de mi congregación, le ponemos (Local), si no, el nombre de su congre
+    $etiqueta_cong = $es_local ? "(Local)" : "(" . $row['nombre_congregacion'] . ")";
+
+    // Construimos el título que saldrá en la tarjetita del calendario
+    // Ej: Gabriel Vielma (Sabaneta) - N° 5
+    $titulo_mostrar = $row['nombre'] . " " . $row['apellido'] . "\n" . $etiqueta_cong . " | N° " . $row['numero_discurso'];
 
     $eventos[] = [
         'id' => $row['id'],
-        'title' => $row['nombre'] . " " . $row['apellido'] . " (B-" . $row['numero_discurso'] . ")",
+        'title' => $titulo_mostrar,
         'start' => $row['fecha'],
         'backgroundColor' => $colorFondo,
         'borderColor' => $colorFondo,
         'textColor' => $colorTexto,
         'extendedProps' => [
             'estado' => $row['estado'],
-            'es_local' => $es_local // ¡AQUÍ ENVIAMOS LA ETIQUETA AL CALENDARIO!
+            'es_local' => $es_local 
         ]
     ];
 }

@@ -1,5 +1,9 @@
 <?php
 // vistas/coord_panel.php
+
+header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
+header("Cache-Control: post-check=0, pre-check=0", false);
+header("Pragma: no-cache");
 require_once 'conexion/conexion.php';
 
 $baseDatos = new Conexion();
@@ -23,98 +27,396 @@ if ($perfil) {
                   AND s.congregacion_solicitante_id != :mi_id
                   AND s.estado = 'Pendiente'
                   AND s.fecha >= CURDATE()";
-    
+
     $stmt_notif = $conn->prepare($sql_notif);
     $stmt_notif->execute([':mi_id' => $mi_cong_id]);
     $total_notificaciones = $stmt_notif->fetchColumn();
 }
 ?>
 
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+<style>
+    /* Estilos inyectados para la vista del panel */
+    .admin-container {
+        max-width: 1000px;
+        margin: 0 auto;
+        font-family: 'Segoe UI', Tahoma, sans-serif;
+        color: #333;
+    }
+
+    /* ESTILOS DEL FORMULARIO DE INICIO */
+    .form-bienvenida {
+        background: white;
+        padding: 30px;
+        border-radius: 12px;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+    }
+
+    .form-bienvenida h2 {
+        margin-top: 0;
+        color: #2c3e50;
+        border-bottom: 2px solid #ecf0f1;
+        padding-bottom: 10px;
+    }
+
+    .input-group label {
+        display: block;
+        font-weight: bold;
+        color: #34495e;
+        margin-bottom: 5px;
+        font-size: 0.9em;
+    }
+
+    .input-group input {
+        width: 100%;
+        padding: 10px;
+        border: 1px solid #bdc3c7;
+        border-radius: 6px;
+        font-size: 1em;
+        box-sizing: border-box;
+        transition: border 0.3s;
+    }
+
+    .input-group input:focus {
+        border-color: #3498db;
+        outline: none;
+    }
+
+    /* TARJETA DE RESUMEN (CUANDO YA HAY PERFIL) */
+    .perfil-card {
+        background: white;
+        border-radius: 12px;
+        padding: 25px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+        margin-bottom: 30px;
+        border-left: 5px solid #3498db;
+    }
+
+    .perfil-info h2 {
+        margin: 0 0 10px 0;
+        color: #2c3e50;
+    }
+
+    .perfil-info p {
+        margin: 5px 0;
+        color: #555;
+    }
+
+    .btn-editar {
+        background: #7f8c8d;
+        color: white;
+        text-decoration: none;
+        padding: 10px 20px;
+        border-radius: 6px;
+        font-weight: bold;
+        transition: background 0.3s;
+    }
+
+    .btn-editar:hover {
+        background: #606b6b;
+    }
+
+    /* GRID DE MÓDULOS */
+    .modulos-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+        gap: 20px;
+    }
+
+    /* TARJETAS DE ACCESO (BOTONES) */
+    .modulo-card {
+        background: white;
+        border-radius: 12px;
+        padding: 25px 20px;
+        text-align: center;
+        text-decoration: none;
+        color: #2c3e50;
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.04);
+        transition: all 0.3s ease;
+        border: 1px solid #f0f0f0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 10px;
+        position: relative;
+    }
+
+    .modulo-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+        border-color: #ddd;
+    }
+
+    .modulo-icon {
+        font-size: 2.5em;
+        margin-bottom: 5px;
+    }
+
+    .modulo-title {
+        font-weight: bold;
+        font-size: 1.1em;
+        margin: 0;
+    }
+
+    /* Colores Hover */
+    .card-maestro:hover {
+        border-bottom: 4px solid #27ae60;
+    }
+
+    .card-solicitudes:hover {
+        border-bottom: 4px solid #f39c12;
+    }
+
+    .card-oradores:hover {
+        border-bottom: 4px solid #3498db;
+    }
+
+    .card-hospitalidad:hover {
+        border-bottom: 4px solid #e74c3c;
+    }
+
+    .card-calendario:hover {
+        border-bottom: 4px solid #9b59b6;
+    }
+
+    .card-directorio:hover {
+        border-bottom: 4px solid #f1c40f;
+    }
+
+    /* GLOBO DE NOTIFICACIÓN FLOTANTE */
+    .badge-flotante {
+        position: absolute;
+        top: -10px;
+        right: -10px;
+        background-color: #e74c3c;
+        color: white;
+        border-radius: 50%;
+        width: 28px;
+        height: 28px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.9em;
+        font-weight: bold;
+        border: 3px solid white;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        z-index: 10;
+        animation: latido 2s infinite;
+    }
+
+    @keyframes latido {
+        0% {
+            transform: scale(1);
+        }
+
+        50% {
+            transform: scale(1.1);
+        }
+
+        100% {
+            transform: scale(1);
+        }
+    }
+
+    .btn-guardar {
+        background: #27ae60;
+        color: white;
+        border: none;
+        padding: 12px;
+        border-radius: 6px;
+        font-weight: bold;
+        cursor: pointer;
+        transition: 0.3s;
+    }
+
+    .btn-guardar:hover {
+        background: #219150;
+    }
+
+    /* Ajuste para el z-index del mapa para que no tape otros elementos */
+    #map {
+        z-index: 1;
+    }
+
+    @media (max-width: 768px) {
+        .perfil-card {
+            flex-direction: column;
+            text-align: center;
+            gap: 15px;
+        }
+    }
+</style>
+
 <div class="admin-container">
+
     <?php if (!$perfil): ?>
-        <h2>Completa el Perfil de tu Congregación</h2>
-        <p>Antes de poder gestionar oradores o arreglos, necesitamos los datos de tu congregación y de contacto.</p>
+        <div class="form-bienvenida">
+            <h2>Completa el Perfil de tu Congregación</h2>
+            <p style="color: #7f8c8d; margin-bottom: 25px;">Antes de poder gestionar oradores o arreglos, necesitamos los
+                datos de tu congregación y de contacto.</p>
 
-        <form action="guardar_perfil.php" method="POST" style="margin-top: 20px;">
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
-                <div class="input-group" style="grid-column: 1 / -1;">
-                    <label for="nombre">Nombre de la Congregación:</label>
-                    <input type="text" id="nombre" name="nombre" required placeholder="Ej: Centro, Barinas">
+            <form action="guardar_perfil.php" method="POST">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                    <div class="input-group" style="grid-column: 1 / -1;">
+                        <label for="nombre">Nombre de la Congregación:</label>
+                        <input type="text" id="nombre" name="nombre" required placeholder="Ej: Centro, Barinas">
+                    </div>
+
+                    <div class="input-group" style="grid-column: 1 / -1;">
+                        <label for="ubicacion">Ubicación (Dirección en texto):</label>
+                        <input type="text" id="ubicacion" name="ubicacion_texto" required
+                            placeholder="Ej: Av. Principal con calle 2">
+                    </div>
+
+                    <div style="grid-column: 1 / -1; margin-top: 10px;">
+                        <label
+                            style="font-weight: bold; color: #2c3e50; font-size: 1.1em; border-bottom: 2px solid #eee; padding-bottom: 5px; display: block; margin-bottom: 10px;">
+                            📍 Ubicación en el Mapa
+                        </label>
+                        <p style="font-size: 0.9em; color: #7f8c8d; margin-top: -5px; margin-bottom: 15px;">
+                            Haz clic en el mapa o arrastra el marcador rojo para fijar la ubicación exacta del Salón del
+                            Reino.
+                        </p>
+
+                        <div id="map"
+                            style="height: 300px; border-radius: 8px; border: 2px solid #bdc3c7; margin-bottom: 15px;">
+                        </div>
+
+                        <div style="display: flex; gap: 20px;">
+                            <div class="input-group" style="flex: 1;">
+                                <label for="latitud">Latitud (Automática):</label>
+                                <input type="text" id="latitud" name="latitud" value="8.622600" readonly
+                                    style="background: #f8f9fa; color: #2980b9; font-family: monospace; font-weight: bold;">
+                            </div>
+                            <div class="input-group" style="flex: 1;">
+                                <label for="longitud">Longitud (Automática):</label>
+                                <input type="text" id="longitud" name="longitud" value="-70.203900" readonly
+                                    style="background: #f8f9fa; color: #2980b9; font-family: monospace; font-weight: bold;">
+                            </div>
+                        </div>
+                    </div>
+                    <h3
+                        style="grid-column: 1 / -1; margin-top: 15px; border-bottom: 1px solid #ecf0f1; padding-bottom: 5px; color: #2c3e50;">
+                        Datos del Coordinador</h3>
+
+                    <div class="input-group">
+                        <label for="coord_nombre">Nombres:</label>
+                        <input type="text" id="coord_nombre" name="coord_nombre" required>
+                    </div>
+
+                    <div class="input-group">
+                        <label for="coord_apellido">Apellidos:</label>
+                        <input type="text" id="coord_apellido" name="coord_apellido" required>
+                    </div>
+
+                    <div class="input-group">
+                        <label for="coord_telefono">Teléfono (WhatsApp):</label>
+                        <input type="text" id="coord_telefono" name="coord_telefono" required>
+                    </div>
+
+                    <div class="input-group">
+                        <label for="coord_correo">Correo Electrónico:</label>
+                        <input type="email" id="coord_correo" name="coord_correo" required>
+                    </div>
                 </div>
 
-                <div class="input-group" style="grid-column: 1 / -1;">
-                    <label for="ubicacion">Ubicación (Dirección en texto):</label>
-                    <input type="text" id="ubicacion" name="ubicacion_texto" required>
-                </div>
+                <button type="submit" class="btn-guardar" style="width: 100%; margin-top: 25px; font-size: 1.1em;">💾
+                    Guardar Perfil de Congregación</button>
+            </form>
+        </div>
 
-                <div class="input-group">
-                    <label for="latitud">Latitud (Coordenada):</label>
-                    <input type="number" step="any" id="latitud" name="latitud" required placeholder="Ej: 8.6226">
-                </div>
+        <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+        <script>
+            document.addEventListener('DOMContentLoaded', function () {
+                // Centrado en Barinas por defecto
+                var map = L.map('map').setView([8.6226, -70.2039], 13);
 
-                <div class="input-group">
-                    <label for="longitud">Longitud (Coordenada):</label>
-                    <input type="number" step="any" id="longitud" name="longitud" required placeholder="Ej: -70.2074">
-                </div>
-                
-                <p style="grid-column: 1 / -1; font-size: 0.85em; color: #666; margin-top: -10px;">
-                    * Por ahora ingresaremos las coordenadas manualmente. Más adelante podríamos integrar un mapa para seleccionar la ubicación con un clic.
-                </p>
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    attribution: '© OpenStreetMap contributors'
+                }).addTo(map);
 
-                <h3 style="grid-column: 1 / -1; margin-top: 15px; border-bottom: 1px solid #eee; padding-bottom: 5px;">Datos del Coordinador</h3>
+                var marker = L.marker([8.6226, -70.2039], { draggable: true }).addTo(map);
 
-                <div class="input-group">
-                    <label for="coord_nombre">Nombres:</label>
-                    <input type="text" id="coord_nombre" name="coord_nombre" required>
-                </div>
+                function updateCoords(lat, lng) {
+                    document.getElementById('latitud').value = lat.toFixed(6);
+                    document.getElementById('longitud').value = lng.toFixed(6);
+                }
 
-                <div class="input-group">
-                    <label for="coord_apellido">Apellidos:</label>
-                    <input type="text" id="coord_apellido" name="coord_apellido" required>
-                </div>
+                map.on('click', function (e) {
+                    marker.setLatLng(e.latlng);
+                    updateCoords(e.latlng.lat, e.latlng.lng);
+                });
 
-                <div class="input-group">
-                    <label for="coord_telefono">Teléfono:</label>
-                    <input type="text" id="coord_telefono" name="coord_telefono" required>
-                </div>
+                marker.on('dragend', function (e) {
+                    var pos = marker.getLatLng();
+                    updateCoords(pos.lat, pos.lng);
+                });
 
-                <div class="input-group">
-                    <label for="coord_correo">Correo Electrónico:</label>
-                    <input type="email" id="coord_correo" name="coord_correo" required>
-                </div>
-            </div>
-
-            <button type="submit" class="btn-aprobar" style="width: 100%; margin-top: 20px; padding: 12px; font-size: 1.1em;">Guardar Perfil de Congregación</button>
-        </form>
+                // Asegurar que el mapa cargue del tamaño correcto
+                setTimeout(function () { map.invalidateSize(); }, 400);
+            });
+        </script>
 
     <?php else: ?>
-        <div style="display: flex; justify-content: space-between; align-items: center;">
-            <h2>Resumen de: <?php echo htmlspecialchars($perfil['nombre']); ?></h2>
-            <a href="editar_perfil.php" class="btn-aprobar" style="background-color: #7f8c8d; text-decoration: none; padding: 6px 12px; font-size: 0.9em;">Editar Perfil</a>
-        </div>
-        
-        <p style="margin-top: 10px;"><strong>Dirección:</strong> <?php echo htmlspecialchars($perfil['ubicacion_texto']); ?></p>
-        <p><strong>Coordinador:</strong> <?php echo htmlspecialchars($perfil['coord_nombre'] . " " . $perfil['coord_apellido']); ?> (Tel: <?php echo htmlspecialchars($perfil['coord_telefono']); ?>)</p>
-        
-        <hr style="margin: 20px 0; border: 0; border-top: 1px solid #ccc;">
-
-        <div style="display: flex; gap: 15px; flex-wrap: wrap;">
-            <a href="oradores.php" class="btn-aprobar" style="text-decoration: none; text-align: center; background-color: #3498db; padding: 10px 20px;">Gestionar mis Oradores</a>
-            
-            <a href="gestionar_hogares.php" class="btn-aprobar" style="text-decoration: none; text-align: center; background-color: #fd06068a; padding: 10px 20px; font-weight: bold;">📋 Gestionar Hospitalidad</a>
-            
-            <a href="calendario_arreglos.php" class="btn-aprobar" style="text-decoration: none; text-align: center; background-color: #9b59b6; padding: 10px 20px;">Buscar Arreglos</a>
-            
-            <a href="control_arreglos.php" class="btn-aprobar" style="text-decoration: none; text-align: center; background-color: #27ae60; padding: 10px 20px; font-weight: bold;">📋 Panel Maestro de Arreglos</a>
-            
-            <a href="solicitudes_recibidas.php" class="btn-aprobar" style="position: relative; text-decoration: none; text-align: center; background-color: #f39c12; padding: 10px 20px;">
-                🔔 Solicitudes Recibidas
-                <?php if ($total_notificaciones > 0): ?>
-                    <span style="position: absolute; top: -10px; right: -10px; background-color: #e74c3c; color: white; border-radius: 50%; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; font-size: 0.85em; font-weight: bold; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">
-                        <?php echo $total_notificaciones; ?>
-                    </span>
-                <?php endif; ?>
+        <div class="welcome-card"
+            style="display: flex; gap: 15px; align-items: center; padding: 20px; background: white; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); margin-bottom: 30px; border-left: 5px solid #3498db;">
+            <a href="editar_perfil.php"
+                style="background: #7f8c8d; color: white; padding: 10px 20px; text-decoration: none; border-radius: 6px; font-weight: bold; display: flex; align-items: center; gap: 8px; transition: 0.3s;">
+                ✏️ Editar Perfil
+            </a>
+            <a href="seguridad.php"
+                style="background: #e74c3c; color: white; padding: 10px 20px; text-decoration: none; border-radius: 6px; font-weight: bold; display: flex; align-items: center; gap: 8px; transition: 0.3s;">
+                🔒 Seguridad
             </a>
         </div>
+        <h3 style="color: #2c3e50; margin-bottom: 20px; border-bottom: 2px solid #ddd; padding-bottom: 10px;">Módulos de
+            Gestión</h3>
+
+        <div class="modulos-grid">
+
+            <a href="control_arreglos.php" class="modulo-card card-maestro">
+                <div class="modulo-icon">📅</div>
+                <h3 class="modulo-title">Panel Maestro</h3>
+            </a>
+
+            <a href="solicitudes_recibidas.php" class="modulo-card card-solicitudes">
+                <?php if ($total_notificaciones > 0): ?>
+                    <span class="badge-flotante"><?php echo $total_notificaciones; ?></span>
+                <?php endif; ?>
+                <div class="modulo-icon">🔔</div>
+                <h3 class="modulo-title">Solicitudes Recibidas</h3>
+            </a>
+
+            <a href="oradores.php" class="modulo-card card-oradores">
+                <div class="modulo-icon">🗣️</div>
+                <h3 class="modulo-title">Mis Oradores</h3>
+            </a>
+
+            <a href="gestionar_hogares.php" class="modulo-card card-hospitalidad">
+                <div class="modulo-icon">🏠</div>
+                <h3 class="modulo-title">Hospitalidad</h3>
+            </a>
+
+            <a href="calendario_arreglos.php" class="modulo-card card-calendario">
+                <div class="modulo-icon">🔍</div>
+                <h3 class="modulo-title">Buscar Arreglos</h3>
+            </a>
+
+            <a href="directorio_congregaciones.php" class="modulo-card card-directorio">
+                <div class="modulo-icon">📖</div>
+                <h3 class="modulo-title">Directorio</h3>
+            </a>
+
+            <a href="cambiar_horario.php" class="modulo-card" style="border-bottom: 4px solid #e67e22;">
+                <div class="modulo-icon">🔄</div>
+                <h3 class="modulo-title">Cambio de Horario</h3>
+            </a>
+
+        </div>
+
     <?php endif; ?>
 </div>
