@@ -1,0 +1,11 @@
+# Archivos sensibles
+.env
+.env.local
+.env.*.local
+
+# Archivos del sistema
+.DS_Store
+Thumbs.db
+
+# Archivos de configuración personal
+*.log

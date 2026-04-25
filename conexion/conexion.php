@@ -1,12 +1,33 @@
 <?php
 // conexion/conexion.php
 
+// Cargar variables de entorno desde .env
+function cargarEnv($ruta) {
+    if (!file_exists($ruta)) return;
+    $lineas = file($ruta, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+    foreach ($lineas as $linea) {
+        if (strpos(trim($linea), '#') === 0) continue;
+        list($nombre, $valor) = explode('=', $linea, 2);
+        $_ENV[trim($nombre)] = trim($valor);
+    }
+}
+
+$cwd = dirname(__DIR__);
+cargarEnv($cwd . '/.env');
+
 class Conexion {
-    private $host = "localhost";
-    private $db_name = "gestion_discursos";
-    private $username = "root"; // Usuario por defecto de XAMPP
-    private $password = "";     // Contraseña por defecto de XAMPP suele estar vacía
+    private $host;
+    private $db_name;
+    private $username;
+    private $password;
     public $conn;
+
+    public function __construct() {
+        $this->host = $_ENV['DB_HOST'] ?? 'localhost';
+        $this->db_name = $_ENV['DB_NAME'] ?? 'gestion_discursos';
+        $this->username = $_ENV['DB_USER'] ?? 'root';
+        $this->password = $_ENV['DB_PASSWORD'] ?? '';
+    }
 
     public function obtenerConexion() {
         $this->conn = null;
