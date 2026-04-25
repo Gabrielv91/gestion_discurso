@@ -291,19 +291,62 @@ $salidas = $stmt_sal->fetchAll(PDO::FETCH_ASSOC);
             z-index: 100;
             text-align: center;
         }
+
+        /* --- ADAPTACIÓN MÓVIL AÑADIDA AQUÍ --- */
+        @media (max-width: 768px) {
+            .header a {
+                display: block !important;
+                margin: 10px auto !important;
+                padding: 12px !important;
+                background-color: rgba(255, 255, 255, 0.15) !important;
+                border-radius: 8px !important;
+                width: 90% !important;
+                box-sizing: border-box !important;
+                text-decoration: none !important;
+                text-align: center;
+            }
+            .filtro-bar {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            .filtro-bar div {
+                display: flex;
+                justify-content: space-between;
+                width: 100%;
+            }
+            .filtro-bar .btn-filtro,
+            .filtro-bar .btn-limpiar,
+            .filtro-bar a[target="_blank"] {
+                width: 100%;
+                text-align: center;
+                box-sizing: border-box;
+                margin: 5px 0 0 0 !important;
+            }
+            .dist-center {
+                flex-direction: column;
+                text-align: center;
+            }
+            .dist-center div {
+                justify-content: center;
+                flex-wrap: wrap;
+                width: 100%;
+            }
+            .dist-center button {
+                width: 100%;
+                margin-bottom: 5px;
+            }
+        }
     </style>
 </head>
 
 <body style="background: #ecf0f1;">
-    <header style="background: #2c3e50; color: white; padding: 20px; text-align: center;">
+    <header class="header" style="background: #2c3e50; color: white; padding: 20px; text-align: center;">
         <h1 style="margin: 0;">Panel Maestro de Arreglos</h1>
         <p style="margin: 5px 0 0 0;">Congregación: <strong><?php echo htmlspecialchars($mi_cong['nombre']); ?></strong>
         </p>
         <p style="margin-top: 10px;">
-            <a href="dashboard.php" style="color: #bdc3c7; text-decoration: underline; margin-right:15px;">Volver al
-                Panel</a>
-            <a href="gestionar_hogares.php" style="color: #bdc3c7; text-decoration: underline;">🏠 Gestionar
-                Hospitalidad</a>
+            <a href="dashboard.php" style="color: #bdc3c7; text-decoration: underline; margin-right:15px;">Volver al Panel</a>
+            <a href="gestionar_hogares.php" style="color: #bdc3c7; text-decoration: underline;">🏠 Gestionar Hospitalidad</a>
             <a href="directorio_congregaciones.php" style="color: #f1c40f; text-decoration: none; font-weight: bold; padding: 5px 10px; border: 1px solid #f1c40f; border-radius: 4px;">📖 Directorio y Agendas</a>
         </p>
     </header>

@@ -209,17 +209,9 @@ if ($perfil) {
     }
 
     @keyframes latido {
-        0% {
-            transform: scale(1);
-        }
-
-        50% {
-            transform: scale(1.1);
-        }
-
-        100% {
-            transform: scale(1);
-        }
+        0% { transform: scale(1); }
+        50% { transform: scale(1.1); }
+        100% { transform: scale(1); }
     }
 
     .btn-guardar {
@@ -431,6 +423,69 @@ if ($perfil) {
             </a>
 
         </div>
-
     <?php endif; ?>
 </div>
+
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#2c3e50">
+<link rel="apple-touch-icon" href="icono-192.png">
+
+<script>
+    // 1. Instalar la PWA (Service Worker) para que el teléfono la vea como App
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('sw.js')
+                .then(reg => console.log('PWA Lista'))
+                .catch(err => console.log('Error PWA', err));
+        });
+    }
+
+    // 2. Pedir permiso al teléfono/PC para lanzar notificaciones al entrar al Panel
+    document.addEventListener('DOMContentLoaded', () => {
+        if ('Notification' in window && Notification.permission !== 'granted' && Notification.permission !== 'denied') {
+            Notification.requestPermission();
+        }
+    });
+
+    // 3. Motor que revisa la Base de Datos cada 30 segundos (30000 ms) en busca de nuevas solicitudes
+    setInterval(verificarNuevasSolicitudes, 30000); 
+
+    // Guardamos la cantidad que tienes ahorita para comparar
+    let cantidadPendientesAnterior = <?php echo isset($total_notificaciones) ? $total_notificaciones : 0; ?>;
+
+    function verificarNuevasSolicitudes() {
+        fetch('chequear_notificaciones.php')
+            .then(response => response.json())
+            .then(data => {
+                let nuevasPendientes = parseInt(data.total_pendientes);
+                
+                // Si la DB dice que hay MÁS pendientes que hace 30 segundos, ¡Lanzamos la notificación!
+                if (nuevasPendientes > cantidadPendientesAnterior && nuevasPendientes > 0) {
+                    lanzarNotificacionLocal("¡Nueva Solicitud de Arreglo!", "Tienes " + nuevasPendientes + " solicitudes pendientes de revisión.");
+                }
+                
+                cantidadPendientesAnterior = nuevasPendientes;
+                
+                // Actualiza dinámicamente el circulito rojo del panel sin tener que recargar la página
+                let badge = document.querySelector('.badge-flotante');
+                if (badge) {
+                    badge.textContent = nuevasPendientes;
+                }
+            })
+            .catch(error => console.error('Error revisando notificaciones:', error));
+    }
+
+    // Función que hace sonar/vibrar el celular con el mensaje
+    function lanzarNotificacionLocal(titulo, mensaje) {
+        if (Notification.permission === 'granted') {
+            navigator.serviceWorker.ready.then(function(registro) {
+                registro.showNotification(titulo, {
+                    body: mensaje,
+                    icon: 'icono-192.png',
+                    badge: 'icono-192.png',
+                    vibrate: [200, 100, 200]
+                });
+            });
+        }
+    }
+</script>

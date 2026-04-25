@@ -53,6 +53,7 @@ $lista = $hogares->fetchAll(PDO::FETCH_ASSOC);
 <html lang="es">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Gestión de Hogares</title>
     <link rel="stylesheet" href="css/style.css">
     <style>
@@ -97,6 +98,29 @@ $lista = $hogares->fetchAll(PDO::FETCH_ASSOC);
         
         .td-center { text-align: center; }
         .acciones-wrapper { display: flex; justify-content: center; gap: 8px; }
+
+        /* 👇 PARCHE CSS MÓVIL 👇 */
+        @media (max-width: 768px) {
+            body { padding: 10px; }
+            .admin-card { padding: 15px; width: 100%; box-sizing: border-box; }
+            
+            /* Botones superiores apilados */
+            .nav-links a { display: block; margin-bottom: 10px; text-align: center; margin-right: 0; }
+            
+            /* Formulario de agregar en columna */
+            .form-agregar { flex-direction: column; align-items: stretch; gap: 12px; }
+            .input-text { width: 100%; box-sizing: border-box; }
+            .checkbox-label { justify-content: flex-start; padding: 5px 0; }
+            .btn-add { justify-content: center; width: 100%; padding: 12px; }
+            
+            /* Arreglo para que la tabla se deslice lateralmente */
+            .table-hogares { display: block; overflow-x: auto; white-space: nowrap; -webkit-overflow-scrolling: touch; border: 1px solid #edf2f7; border-radius: 8px; }
+            
+            /* Botones de acción de la tabla más grandes y apilados */
+            .acciones-wrapper { flex-direction: column; gap: 5px; }
+            .btn-edit, .btn-delete { width: 100%; text-align: center; padding: 10px; box-sizing: border-box; justify-content: center;}
+        }
+        /* 👆 FIN PARCHE CSS MÓVIL 👆 */
     </style>
 </head>
 <body>

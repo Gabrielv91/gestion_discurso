@@ -1,0 +1,22 @@
+{
+  "name": "Sistema de Arreglos",
+  "short_name": "Arreglos",
+  "description": "Gestión de discursos y hospitalidad",
+  "start_url": "./dashboard.php",
+  "display": "standalone",
+  "background_color": "#ecf0f1",
+  "theme_color": "#2c3e50",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "icono-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icono-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

@@ -41,7 +41,41 @@ $solicitudes = $stmt->fetchAll(PDO::FETCH_ASSOC);
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Solicitudes Recibidas</title>
     <link rel="stylesheet" href="css/style.css">
-</head>
+    
+    <style>
+        /* --- ADAPTACIÓN MÓVIL --- */
+        @media (max-width: 768px) {
+            header { padding: 15px; }
+            h1 { font-size: 1.5em; margin-bottom: 10px; }
+            main { padding: 10px !important; }
+            
+            /* Ajustamos el contenedor para ganar espacio en la pantalla */
+            .admin-container { padding: 15px 10px; margin: 0; width: 100%; box-sizing: border-box; }
+            
+            /* Aseguramos que la tabla se pueda deslizar bien con el dedo */
+            div[style*="overflow-x: auto"] {
+                padding-bottom: 10px;
+                -webkit-overflow-scrolling: touch;
+            }
+
+            /* Apilamos los botones de acción para que sean anchos y fáciles de tocar */
+            td div[style*="display: flex"] {
+                flex-direction: column !important;
+                align-items: stretch !important;
+                gap: 8px !important;
+            }
+            
+            td div[style*="display: flex"] a {
+                width: 100% !important;
+                box-sizing: border-box !important;
+                padding: 10px !important;
+                font-size: 0.95em !important;
+                text-align: center !important;
+                border-radius: 6px !important;
+            }
+        }
+    </style>
+    </head>
 <body>
     <header>
         <h1>Solicitudes Recibidas</h1>
