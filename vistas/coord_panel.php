@@ -405,6 +405,10 @@ if ($perfil) {
                 <div class="modulo-icon">🔍</div>
                 <h3 class="modulo-title">Buscar Arreglos</h3>
             </a>
+            <a href="intercambiar_fechas.php" class="modulo-card" style="border-bottom: 4px solid #e67e22;">
+                <div class="modulo-icon">😎</div>
+                <h3 class="modulo-title">Intercambio de Arreglos</h3>
+            </a>
 
             <a href="directorio_congregaciones.php" class="modulo-card card-directorio">
                 <div class="modulo-icon">📖</div>
@@ -414,6 +418,16 @@ if ($perfil) {
             <a href="cambiar_horario.php" class="modulo-card" style="border-bottom: 4px solid #e67e22;">
                 <div class="modulo-icon">🔄</div>
                 <h3 class="modulo-title">Cambio de Horario</h3>
+            </a>
+
+            <a href="lista_discursos.php" style="text-decoration: none; color: inherit;">
+                <div class="modulo-card"
+                    style="background: white; padding: 20px; border-radius: 10px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.05); border: 1px solid #eee; transition: 0.3s;"
+                    onmouseover="this.style.transform='translateY(-5px)'; this.style.boxShadow='0 8px 15px rgba(0,0,0,0.1)';"
+                    onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 6px rgba(0,0,0,0.05)';">
+                    <div style="font-size: 3em; margin-bottom: 10px;">📋</div>
+                    <h3 style="margin: 0; font-size: 1.1em; color: #2c3e50;">Lista de Discursos</h3>
+                </div>
             </a>
 
         </div>
