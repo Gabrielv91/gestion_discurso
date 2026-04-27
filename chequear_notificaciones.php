@@ -23,7 +23,7 @@ if (!$mi_cong_id) {
     exit();
 }
 
-// 1. Contar total de pendientes (Para mantener el globito rojo del menú actualizado)
+// 1. Contar total de pendientes (Mantenemos el filtro aquí para que el globito rojo no cuente los locales)
 $sql_pendientes = "SELECT COUNT(*) FROM solicitudes s
                    INNER JOIN oradores o ON s.orador_id = o.id
                    WHERE o.congregacion_id = ? 
@@ -35,17 +35,18 @@ $stmt_pend->execute([$mi_cong_id, $mi_cong_id]);
 $total_pendientes = $stmt_pend->fetchColumn();
 
 // 2. Buscar UNA notificación nueva que no hayas leído (notificado = 0)
+// LE QUITAMOS EL FILTRO: Ahora te avisará de cancelaciones sin importar quién solicitó el arreglo.
 $sql_notif = "SELECT s.id, s.estado, s.fecha, o.nombre, o.apellido, c.nombre as cong_destino
               FROM solicitudes s
               INNER JOIN oradores o ON s.orador_id = o.id
               INNER JOIN congregaciones c ON s.congregacion_solicitante_id = c.id
               WHERE o.congregacion_id = ? 
-              AND s.congregacion_solicitante_id != ?
               AND s.notificado = 0
               AND s.fecha >= CURDATE()
               LIMIT 1";
 $stmt_notif = $conn->prepare($sql_notif);
-$stmt_notif->execute([$mi_cong_id, $mi_cong_id]);
+// ¡Importante! Ahora el execute solo recibe UN parámetro ($mi_cong_id) porque solo hay un "?" en la consulta
+$stmt_notif->execute([$mi_cong_id]); 
 $alerta = $stmt_notif->fetch(PDO::FETCH_ASSOC);
 
 $respuesta = [
