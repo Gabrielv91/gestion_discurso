@@ -3,93 +3,74 @@
 session_start();
 require_once 'conexion/conexion.php';
 
-if (!isset($_SESSION['usuario_id']) || $_SESSION['rol'] != 'Coordinador') {
-    header("Location: index.php");
-    exit();
-}
-
-if ($_SERVER["REQUEST_METHOD"] == "POST") {
-    $orador_id = intval($_POST['orador_id']);
-    $nombre = trim($_POST['nombre']);
-    $apellido = trim($_POST['apellido']);
-    $telefono = trim($_POST['telefono']); // <-- RECIBIMOS EL TELÉFONO
-    $espiritualidad = $_POST['espiritualidad'];
-    $estado = $_POST['estado'];
+// Verificamos que los datos vengan por POST y haya sesión
+if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_SESSION['usuario_id'])) {
     
-    // Los discursos que el usuario dejó marcados en la pantalla
-    $discursos_nuevos = isset($_POST['discursos_seleccionados']) ? $_POST['discursos_seleccionados'] : [];
-
     $baseDatos = new Conexion();
     $conn = $baseDatos->obtenerConexion();
 
-    if ($conn != null) {
-        try {
-            $conn->beginTransaction();
+    // Recibimos los datos del formulario
+    $orador_id = intval($_POST['orador_id']);
+    $nombre = trim($_POST['nombre']);
+    $apellido = trim($_POST['apellido']);
+    $espiritualidad = $_POST['espiritualidad'];
+    $telefono = trim($_POST['telefono']);
+    $estado = $_POST['estado']; // Aquí viene 'Activo' o 'Inactivo'
+    
+    // Recibimos los discursos marcados (si no marcó ninguno, creamos un arreglo vacío)
+    $discursos = isset($_POST['discursos_seleccionados']) ? $_POST['discursos_seleccionados'] : [];
 
-            // 1. Actualizamos los datos básicos del orador (AGREGADO EL TELÉFONO)
-            $sql_update = "UPDATE oradores SET nombre = :nombre, apellido = :apellido, telefono = :telefono, espiritualidad = :espiritualidad, estado = :estado WHERE id = :id";
-            $stmt_update = $conn->prepare($sql_update);
-            $stmt_update->execute([
-                ':nombre' => $nombre,
-                ':apellido' => $apellido,
-                ':telefono' => $telefono,
-                ':espiritualidad' => $espiritualidad,
-                ':estado' => $estado,
-                ':id' => $orador_id
-            ]);
-
-            // 2. Traemos de la base de datos lo que el orador TENÍA antes de este cambio
-            $sql_viejos = "SELECT numero_discurso, ruta_archivo FROM discursos WHERE orador_id = :id";
-            $stmt_viejos = $conn->prepare($sql_viejos);
-            $stmt_viejos->execute([':id' => $orador_id]);
-            $discursos_bd = $stmt_viejos->fetchAll(PDO::FETCH_ASSOC);
+    try {
+        // ========================================================================
+        // 1. EL EFECTO DOMINÓ: REGLA DE INACTIVACIÓN
+        // ========================================================================
+        if ($estado == 'Inactivo') {
+            // Si lo suspendemos, buscamos arreglos futuros (Verdes o Naranjas) y los pasamos a Rojo
+            // Importante: Ponemos notificado = 0 para que le suene la alarma a la otra congregación
+            $sql_dominio = "UPDATE solicitudes 
+                            SET estado = 'Rechazado', notificado = 0 
+                            WHERE orador_id = :oid 
+                            AND fecha >= CURDATE() 
+                            AND estado IN ('Aprobado', 'Pendiente')";
             
-            $discursos_viejos_nums = [];
-            foreach ($discursos_bd as $d) {
-                $discursos_viejos_nums[] = $d['numero_discurso'];
-            }
-
-            // 3. MATEMÁTICAS DE CONJUNTOS
-            $a_borrar = array_diff($discursos_viejos_nums, $discursos_nuevos);
-            $a_insertar = array_diff($discursos_nuevos, $discursos_viejos_nums);
-
-            // 4. Borrar los desmarcados y eliminar sus archivos físicos
-            if (!empty($a_borrar)) {
-                foreach ($discursos_bd as $d) {
-                    if (in_array($d['numero_discurso'], $a_borrar)) {
-                        if (!empty($d['ruta_archivo']) && file_exists($d['ruta_archivo'])) {
-                            unlink($d['ruta_archivo']); 
-                        }
-                        $sql_del = "DELETE FROM discursos WHERE orador_id = :id AND numero_discurso = :num";
-                        $stmt_del = $conn->prepare($sql_del);
-                        $stmt_del->execute([':id' => $orador_id, ':num' => $d['numero_discurso']]);
-                    }
-                }
-            }
-
-            // 5. Insertar los discursos nuevos que se marcaron
-            if (!empty($a_insertar)) {
-                $sql_ins = "INSERT INTO discursos (orador_id, numero_discurso, tema) VALUES (:id, :num, :tema)";
-                $stmt_ins = $conn->prepare($sql_ins);
-                
-                foreach ($a_insertar as $num) {
-                    $stmt_ins->execute([
-                        ':id' => $orador_id,
-                        ':num' => $num,
-                        ':tema' => "Bosquejo " . $num
-                    ]);
-                }
-            }
-
-            $conn->commit();
-            header("Location: oradores.php");
-            exit();
-            
-        } catch(PDOException $e) {
-            $conn->rollBack();
-            echo "Error: " . $e->getMessage();
+            $stmt_dom = $conn->prepare($sql_dominio);
+            $stmt_dom->execute([':oid' => $orador_id]);
         }
+        // ========================================================================
+
+        // 2. Actualizamos los datos personales del orador
+        $sql_update = "UPDATE oradores 
+                       SET nombre = :nom, apellido = :ape, espiritualidad = :espir, telefono = :tel, estado = :est 
+                       WHERE id = :id";
+        $stmt = $conn->prepare($sql_update);
+        $stmt->execute([
+            ':nom' => $nombre,
+            ':ape' => $apellido,
+            ':espir' => $espiritualidad,
+            ':tel' => $telefono,
+            ':est' => $estado,
+            ':id' => $orador_id
+        ]);
+
+        // 3. Actualizamos los bosquejos (La forma más limpia es borrar los viejos y guardar los nuevos)
+        $conn->prepare("DELETE FROM discursos WHERE orador_id = ?")->execute([$orador_id]);
+        
+        if (count($discursos) > 0) {
+            $sql_ins_disc = "INSERT INTO discursos (orador_id, numero_discurso) VALUES (?, ?)";
+            $stmt_disc = $conn->prepare($sql_ins_disc);
+            foreach ($discursos as $num) {
+                $stmt_disc->execute([$orador_id, intval($num)]);
+            }
+        }
+
+        // Todo listo, devolvemos al usuario a su lista de oradores
+        header("Location: oradores.php?mensaje=actualizado");
+        exit();
+
+    } catch (PDOException $e) {
+        die("Error de Base de Datos al actualizar el orador: " . $e->getMessage());
     }
+
 } else {
     header("Location: oradores.php");
     exit();

@@ -23,21 +23,28 @@
             box-sizing: border-box;
         }
 
+        .login-container {
+            width: 100%;
+            display: flex;
+            justify-content: center;
+        }
+
         .login-card { 
             background: white; 
             width: 100%; 
-            max-width: 420px; 
+            max-width: 400px; 
             border-radius: 15px; 
             box-shadow: 0 10px 30px rgba(0,0,0,0.08); 
-            padding: 40px 35px; 
+            padding: 40px 30px; 
             border-top: 6px solid #2c3e50; /* Azul oscuro corporativo */
+            box-sizing: border-box; /* <--- LA MAGIA QUE LO CENTRA PERFECTO */
         }
 
         .header-text { text-align: center; margin-bottom: 30px; }
         .header-text h1 { margin: 0; color: #2c3e50; font-size: 1.6em; }
         .header-text p { color: #7f8c8d; margin-top: 8px; font-size: 0.95em; }
 
-        .form-group { margin-bottom: 20px; }
+        .form-group { margin-bottom: 20px; width: 100%; }
         .form-group label { display: block; font-weight: bold; color: #34495e; margin-bottom: 8px; font-size: 0.9em; }
         
         .form-group input { 
@@ -71,6 +78,7 @@
             transition: 0.3s; 
             box-shadow: 0 4px 6px rgba(44, 62, 80, 0.2);
             margin-top: 10px;
+            box-sizing: border-box;
         }
         .btn-ingresar:hover { background: #1a252f; transform: translateY(-2px); box-shadow: 0 6px 12px rgba(44, 62, 80, 0.3); }
 
@@ -149,47 +157,37 @@
         let eventoInstalacion = null;
         const btnInstalar = document.getElementById('btn-instalar');
 
-        // 1. Registramos el Service Worker silenciosamente al entrar al login
+        // 1. Registramos el Service Worker
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
                 navigator.serviceWorker.register('sw.js');
             });
         }
 
-        // 2. Comprobamos si la app YA está instalada (pantalla completa)
+        // 2. Comprobamos si la app YA está instalada
         if (window.matchMedia('(display-mode: standalone)').matches) {
             btnInstalar.style.display = 'none';
         }
 
-        // 3. Escuchamos al navegador para ver si nos da permiso de mostrar el botón
+        // 3. Escuchamos al navegador
         window.addEventListener('beforeinstallprompt', (e) => {
-            // Evitamos que salga el banner feo nativo de Android
             e.preventDefault();
-            // Guardamos el evento para dispararlo cuando toquen nuestro botón naranja
             eventoInstalacion = e;
-            // ¡Mostramos nuestro botón flotante!
             btnInstalar.style.display = 'flex';
         });
 
-        // 4. Qué pasa cuando tocan el botón naranja
+        // 4. Qué pasa cuando tocan el botón
         btnInstalar.addEventListener('click', async () => {
             if (!eventoInstalacion) return;
-            
-            // Disparamos la ventana de instalación del sistema operativo
             eventoInstalacion.prompt();
-            
-            // Esperamos la respuesta del usuario
             const { outcome } = await eventoInstalacion.userChoice;
             if (outcome === 'accepted') {
                 console.log('El usuario instaló la App');
             }
-            
-            // Limpiamos y ocultamos el botón
             eventoInstalacion = null;
             btnInstalar.style.display = 'none';
         });
 
-        // 5. Si la app se instala con éxito, el botón se oculta automáticamente
         window.addEventListener('appinstalled', () => {
             btnInstalar.style.display = 'none';
         });

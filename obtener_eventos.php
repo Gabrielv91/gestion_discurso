@@ -14,12 +14,13 @@ $stmt->execute([':uid' => $usuario_id]);
 $mi_cong_id = $stmt->fetchColumn();
 
 // 2. Traer las solicitudes + Datos del Orador + Nombre de su Congregación
-// NOTA: Agregamos el JOIN con congregaciones (c) para traer el nombre
+// Filtramos específicamente para traer solo Aprobados, Pendientes y Cancelados (Rechazados)
 $sql = "SELECT s.id, s.fecha, s.estado, o.nombre, o.apellido, s.numero_discurso, o.congregacion_id, c.nombre AS nombre_congregacion
         FROM solicitudes s
         INNER JOIN oradores o ON s.orador_id = o.id
         LEFT JOIN congregaciones c ON o.congregacion_id = c.id
-        WHERE s.congregacion_solicitante_id = :mi_id";
+        WHERE s.congregacion_solicitante_id = :mi_id
+        AND s.estado IN ('Aprobado', 'Pendiente', 'Rechazado')";
 
 $stmt = $conn->prepare($sql);
 $stmt->execute([':mi_id' => $mi_cong_id]);

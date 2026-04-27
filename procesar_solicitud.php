@@ -17,37 +17,77 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_SESSION['usuario_id'])) {
     $numero_discurso = intval($_POST['numero_discurso']);
     
     try {
-        // 1. AVERIGUAMOS DE DÓNDE ES EL ORADOR ANTES DE GUARDARLO
+        // 1. AVERIGUAMOS DE DÓNDE ES EL ORADOR PARA SABER SI SE AUTO-APRUEBA
         $sql_verificar = "SELECT congregacion_id FROM oradores WHERE id = :orador_id";
         $stmt_ver = $conn->prepare($sql_verificar);
         $stmt_ver->execute([':orador_id' => $orador_id]);
         $orador = $stmt_ver->fetch(PDO::FETCH_ASSOC);
 
-        // 2. LÓGICA DE AUTO-APROBACIÓN
+        // LÓGICA DE AUTO-APROBACIÓN
         if ($orador && $orador['congregacion_id'] == $mi_cong_id) {
-            // El orador es de MI congregación: Se aprueba solo.
-            $estado = 'Aprobado'; 
+            // El orador es de MI congregación: Se aprueba solo (Verde).
+            $estado_nuevo = 'Aprobado'; 
         } else {
-            // El orador es un invitado: Se queda esperando que el otro coordinador apruebe.
-            $estado = 'Pendiente';
+            // El orador es un invitado: Se queda esperando (Naranja).
+            $estado_nuevo = 'Pendiente';
         }
 
-        // 3. Insertamos la solicitud con el estado correcto
-        $sql = "INSERT INTO solicitudes (congregacion_solicitante_id, orador_id, numero_discurso, fecha, hora, estado) 
-                VALUES (:congregacion_solicitante_id, :orador_id, :numero_discurso, :fecha, :hora, :estado)";
-        
-        $stmt = $conn->prepare($sql);
-        $stmt->execute([
-            ':congregacion_solicitante_id' => $mi_cong_id,
-            ':orador_id' => $orador_id,
-            ':numero_discurso' => $numero_discurso,
-            ':fecha' => $fecha,
-            ':hora' => $hora,
-            ':estado' => $estado
-        ]);
+        // -------------------------------------------------------------------
+        // 2. MÁQUINA DE ESTADOS: REVISAMOS SI YA HABÍA ALGO EN ESA FECHA
+        // -------------------------------------------------------------------
+        $sql_check_fecha = "SELECT id, estado FROM solicitudes WHERE congregacion_solicitante_id = ? AND fecha = ?";
+        $stmt_check = $conn->prepare($sql_check_fecha);
+        $stmt_check->execute([$mi_cong_id, $fecha]);
+        $solicitud_existente = $stmt_check->fetch(PDO::FETCH_ASSOC);
 
-        header("Location: calendario_arreglos.php?mensaje=solicitud_enviada");
-        exit();
+        if ($solicitud_existente) {
+            $estado_actual = $solicitud_existente['estado'];
+            $id_solicitud_vieja = $solicitud_existente['id'];
+
+            if ($estado_actual === 'Aprobado') {
+                // REGLA 1 (VERDE): Ya hay un arreglo confirmado. BLOQUEO TOTAL.
+                // Lo mandamos al calendario con un error para que no haga desastres.
+                header("Location: calendario_arreglos.php?error=bloqueado_verde");
+                exit();
+            } else {
+                // REGLA 2 (NARANJA O ROJO): Pendiente o Cancelado. LO SOBREESCRIBIMOS.
+                $sql_update = "UPDATE solicitudes 
+                               SET orador_id = :orador_id, 
+                                   numero_discurso = :numero_discurso, 
+                                   hora = :hora, 
+                                   estado = :estado 
+                               WHERE id = :id_viejo";
+                
+                $stmt_upd = $conn->prepare($sql_update);
+                $stmt_upd->execute([
+                    ':orador_id' => $orador_id,
+                    ':numero_discurso' => $numero_discurso,
+                    ':hora' => $hora,
+                    ':estado' => $estado_nuevo,
+                    ':id_viejo' => $id_solicitud_vieja
+                ]);
+
+                header("Location: calendario_arreglos.php?mensaje=solicitud_actualizada");
+                exit();
+            }
+        } else {
+            // REGLA 3 (VACÍO): La fecha estaba libre. INSERTAMOS NORMAL.
+            $sql = "INSERT INTO solicitudes (congregacion_solicitante_id, orador_id, numero_discurso, fecha, hora, estado) 
+                    VALUES (:congregacion_solicitante_id, :orador_id, :numero_discurso, :fecha, :hora, :estado)";
+            
+            $stmt = $conn->prepare($sql);
+            $stmt->execute([
+                ':congregacion_solicitante_id' => $mi_cong_id,
+                ':orador_id' => $orador_id,
+                ':numero_discurso' => $numero_discurso,
+                ':fecha' => $fecha,
+                ':hora' => $hora,
+                ':estado' => $estado_nuevo
+            ]);
+
+            header("Location: calendario_arreglos.php?mensaje=solicitud_enviada");
+            exit();
+        }
 
     } catch (PDOException $e) {
         die("Error de Base de Datos al guardar la solicitud: " . $e->getMessage());

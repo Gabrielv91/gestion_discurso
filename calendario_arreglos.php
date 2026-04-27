@@ -30,9 +30,9 @@ $conn = $baseDatos->obtenerConexion();
         /* CONTENEDOR ULTRA COMPACTO */
         #calendar-container {
             max-width: 950px;
-            margin: 15px auto; /* Menos margen exterior */
+            margin: 15px auto;
             background: white;
-            padding: 15px; /* Menos relleno interior */
+            padding: 15px;
             border-radius: 12px;
             box-shadow: 0 5px 20px rgba(0, 0, 0, 0.05);
         }
@@ -42,12 +42,12 @@ $conn = $baseDatos->obtenerConexion();
             justify-content: center;
             flex-wrap: wrap;
             gap: 10px;
-            margin-bottom: 10px; /* Más pegado al calendario */
+            margin-bottom: 10px;
             padding: 8px;
             background: #fdfdfd;
             border: 1px solid #eee;
             border-radius: 8px;
-            font-size: 0.8em; /* Letra más pequeña */
+            font-size: 0.8em;
             color: #555;
         }
         .leyenda span { display: flex; align-items: center; gap: 4px; font-weight: 500; background: white; padding: 3px 8px; border-radius: 20px; border: 1px solid #f4f4f4;}
@@ -59,7 +59,7 @@ $conn = $baseDatos->obtenerConexion();
         /* Forzamos a que los cuadros de los días sean bajitos */
         .fc-theme-standard .fc-daygrid-day-frame { min-height: 55px !important; } 
         
-        .fc-header-toolbar { margin-bottom: 0.8em !important; } /* Título más pegado a la tabla */
+        .fc-header-toolbar { margin-bottom: 0.8em !important; }
         .fc-toolbar-title { color: #2c3e50; font-weight: bold; font-size: 1.2em !important; text-transform: capitalize; }
         
         /* Botones más chiquitos */
@@ -79,10 +79,24 @@ $conn = $baseDatos->obtenerConexion();
             border: none !important;
             box-shadow: 0 1px 3px rgba(0,0,0,0.1);
             transition: transform 0.2s;
-            margin-bottom: 1px !important; /* Casi pegados entre sí */
+            margin-bottom: 1px !important;
         }
         .fc-event:hover { transform: translateY(-1px); box-shadow: 0 3px 6px rgba(0,0,0,0.15); filter: brightness(0.95); }
         .fc-event-title { font-weight: bold !important; font-size: 0.7em; white-space: normal; line-height: 1.1; text-align: center; }
+
+        /* ESTILOS DE LAS ALERTAS DE RESPUESTA */
+        .alerta-mensaje {
+            max-width: 950px; 
+            margin: 15px auto; 
+            padding: 15px; 
+            border-radius: 8px; 
+            text-align: center; 
+            font-weight: bold; 
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        }
+        .alerta-verde { background-color: #d4edda; color: #155724; border-left: 5px solid #28a745; }
+        .alerta-naranja { background-color: #fff3cd; color: #856404; border-left: 5px solid #ffc107; }
+        .alerta-roja { background-color: #f8d7da; color: #721c24; border-left: 5px solid #dc3545; }
 
     </style>
 </head>
@@ -94,6 +108,23 @@ $conn = $baseDatos->obtenerConexion();
         <a href="dashboard.php">⬅ Volver al Panel Maestro</a>
     </header>
 
+    <?php if (isset($_GET['mensaje']) && $_GET['mensaje'] == 'solicitud_enviada'): ?>
+        <div class="alerta-mensaje alerta-verde">
+            ✅ Solicitud enviada correctamente en la fecha seleccionada.
+        </div>
+    <?php endif; ?>
+
+    <?php if (isset($_GET['mensaje']) && $_GET['mensaje'] == 'solicitud_actualizada'): ?>
+        <div class="alerta-mensaje alerta-naranja">
+            🔄 Arreglo reemplazado: El orador anterior fue sustituido por el nuevo.
+        </div>
+    <?php endif; ?>
+
+    <?php if (isset($_GET['error']) && $_GET['error'] == 'bloqueado_verde'): ?>
+        <div class="alerta-mensaje alerta-roja">
+            🔒 ¡Acción denegada! No se guardó el arreglo porque ya tenías a un hermano Confirmado (Verde) en esa fecha. Debes cancelarlo primero.
+        </div>
+    <?php endif; ?>
     <div id="calendar-container">
         <div class="leyenda">
             <span><strong style="color: #f39c12; font-size: 1.2em;">●</strong> Solicitud Pendiente</span>
@@ -105,80 +136,88 @@ $conn = $baseDatos->obtenerConexion();
     </div>
 
     <script>
-  document.addEventListener('DOMContentLoaded', function() {
-    var calendarEl = document.getElementById('calendar');
-    var today = new Date().toISOString().split('T')[0];
+    document.addEventListener('DOMContentLoaded', function() {
+        var calendarEl = document.getElementById('calendar');
+        var today = new Date().toISOString().split('T')[0];
 
-    var calendar = new FullCalendar.Calendar(calendarEl, {
-      initialView: 'dayGridMonth',
-      locale: 'es',
-      firstDay: 1,
-      contentHeight: 420, // <-- REDUCCIÓN DRÁSTICA DE ALTURA
-      aspectRatio: 1.8,   // <-- OBLIGA AL CALENDARIO A SER MÁS ANCHO QUE ALTO
-      headerToolbar: {
-        left: 'prev,next today',
-        center: 'title',
-        right: 'dayGridMonth,listWeek'
-      },
-      events: 'obtener_eventos.php',
-      
-      dateClick: function(info) {
-        var clickedDate = info.dateStr;
-        var dayOfWeek = new Date(clickedDate + "T00:00:00").getDay();
+        var calendar = new FullCalendar.Calendar(calendarEl, {
+            initialView: 'dayGridMonth',
+            locale: 'es',
+            firstDay: 1,
+            contentHeight: 420,
+            aspectRatio: 1.8,
+            headerToolbar: {
+                left: 'prev,next today',
+                center: 'title',
+                right: 'dayGridMonth,listWeek'
+            },
+            events: 'obtener_eventos.php',
+            
+            dateClick: function(info) {
+                var clickedDate = info.dateStr;
+                var dayOfWeek = new Date(clickedDate + "T00:00:00").getDay();
 
-        if (clickedDate < today) {
-            alert("No puedes gestionar arreglos en fechas pasadas.");
-            return;
-        }
+                if (clickedDate < today) {
+                    alert("No puedes gestionar arreglos en fechas pasadas.");
+                    return;
+                }
 
-        if (dayOfWeek !== 0 && dayOfWeek !== 6) {
-            alert("Los discursos públicos se programan únicamente los Sábados o Domingos.");
-            return;
-        }
+                if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+                    alert("Los discursos públicos se programan únicamente los Sábados o Domingos.");
+                    return;
+                }
 
-        var existingEvents = calendar.getEvents().filter(function(event) {
-            return event.startStr.split('T')[0] === clickedDate; 
-        });
+                var existingEvents = calendar.getEvents().filter(function(event) {
+                    return event.startStr.split('T')[0] === clickedDate; 
+                });
 
-        if (existingEvents.length > 0) {
-            var event = existingEvents[0];
-            var estado = event.extendedProps.estado; 
-            var es_local = event.extendedProps.es_local;
+                // ========================================================
+                // LÓGICA DE COLORES (LA MÁQUINA DE ESTADOS DEL CALENDARIO)
+                // ========================================================
+                if (existingEvents.length > 0) {
+                    var event = existingEvents[0];
+                    var estado = event.extendedProps.estado; 
+                    var es_local = event.extendedProps.es_local;
 
-            if (estado === 'Aprobado') {
-                if (es_local) {
-                    if (confirm("Tienes a un hermano de TU congregación agendado. \n¿Deseas cancelar su salida y dejar el día libre para buscar otro orador visitante?")) {
-                        window.location.href = "eliminar_arreglo_local.php?id=" + event.id + "&fecha=" + clickedDate;
+                    // REGLA 1 (VERDE): Bloqueo total (A menos que sea de tu congre y quieras borrarlo)
+                    if (estado === 'Aprobado') {
+                        if (es_local) {
+                            if (confirm("Tienes a un hermano de TU congregación agendado. \n¿Deseas cancelar su salida y dejar el día libre para buscar otro orador visitante?")) {
+                                window.location.href = "eliminar_arreglo_local.php?id=" + event.id + "&fecha=" + clickedDate;
+                            }
+                            return;
+                        } else {
+                            alert("⚠️ Este arreglo ya está APROBADO (Verde) por otra congregación.\n\nEl arreglo ya está hecho y no se puede modificar desde aquí. La congregación de origen del orador debe cancelar la salida primero para que el día quede libre.");
+                            return;
+                        }
+                    } 
+                    
+                    // REGLA 2 (NARANJA): Avisa que lo va a pisar.
+                    if (estado === 'Pendiente') {
+                        if (!confirm("⏳ Tienes una solicitud PENDIENTE (Naranja) en esta fecha. \n\nSi continúas y seleccionas a un nuevo orador, el hermano actual será reemplazado. ¿Deseas continuar?")) {
+                            return;
+                        }
                     }
-                    return;
+
+                    // REGLA 3 (ROJO): Avisa que lo va a pisar o eliminar.
+                    if (estado === 'Rechazado') {
+                        if (!confirm("❌ Este arreglo quedó CANCELADO/RECHAZADO (Rojo). \n\nSi continúas y seleccionas a un nuevo orador, se sobrescribirá este registro. ¿Deseas buscar otro hermano?")) {
+                            return;
+                        }
+                    }
+                    
                 } else {
-                    alert("⚠️ Este arreglo ya está APROBADO por otra congregación. No se puede modificar desde aquí. \n\nSi necesitas cambiarlo, la congregación de origen del orador debe cancelar la salida primero.");
-                    return;
+                    // REGLA 4 (VACÍO): Día libre
+                    if(!confirm("📅 El " + clickedDate + " está libre. \n¿Deseas buscar un orador para este día?")) return;
                 }
-            } 
-            
-            if (estado === 'Pendiente') {
-                if (!confirm("⏳ Tienes una solicitud PENDIENTE para este día. \n¿Deseas reemplazarla por otro orador? (Se anulará la solicitud actual)")) {
-                    return;
-                }
-            }
 
-            if (estado === 'Rechazado') {
-                if (confirm("❌ Este arreglo fue CANCELADO o RECHAZADO. \n¿Deseas eliminar este registro de tu calendario para buscar a otro orador este día?")) {
-                    window.location.href = "eliminar_solicitud_rechazada.php?id=" + event.id + "&fecha=" + clickedDate;
-                }
-                return;
+                // Si todo está bien y confirmaste, te envía a buscar al hermano
+                window.location.href = "buscar_arreglos.php?fecha=" + clickedDate;
             }
-            
-        } else {
-            if(!confirm("📅 El " + clickedDate + " está libre. \n¿Deseas buscar un orador para este día?")) return;
-        }
-
-        window.location.href = "buscar_arreglos.php?fecha=" + clickedDate;
-      }
+        });
+        
+        calendar.render();
     });
-    calendar.render();
-  });
-</script>
+    </script>
 </body>
 </html>

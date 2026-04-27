@@ -448,29 +448,33 @@ if ($perfil) {
         }
     });
 
-    // 3. Motor que revisa la Base de Datos cada 30 segundos (30000 ms) en busca de nuevas solicitudes
+    // 3. Motor que revisa la Base de Datos cada 30 segundos en busca de nuevas solicitudes o cancelaciones
     setInterval(verificarNuevasSolicitudes, 30000); 
-
-    // Guardamos la cantidad que tienes ahorita para comparar
-    let cantidadPendientesAnterior = <?php echo isset($total_notificaciones) ? $total_notificaciones : 0; ?>;
 
     function verificarNuevasSolicitudes() {
         fetch('chequear_notificaciones.php')
             .then(response => response.json())
             .then(data => {
-                let nuevasPendientes = parseInt(data.total_pendientes);
                 
-                // Si la DB dice que hay MÁS pendientes que hace 30 segundos, ¡Lanzamos la notificación!
-                if (nuevasPendientes > cantidadPendientesAnterior && nuevasPendientes > 0) {
-                    lanzarNotificacionLocal("¡Nueva Solicitud de Arreglo!", "Tienes " + nuevasPendientes + " solicitudes pendientes de revisión.");
-                }
-                
-                cantidadPendientesAnterior = nuevasPendientes;
-                
-                // Actualiza dinámicamente el circulito rojo del panel sin tener que recargar la página
+                // 1. Actualizar el circulito rojo de notificaciones
                 let badge = document.querySelector('.badge-flotante');
                 if (badge) {
-                    badge.textContent = nuevasPendientes;
+                    if (data.total_pendientes > 0) {
+                        badge.textContent = data.total_pendientes;
+                        badge.style.display = 'flex';
+                    } else {
+                        badge.style.display = 'none';
+                    }
+                }
+                
+                // 2. Si el servidor dice que hay una alarma nueva (Solicitud o Cancelación), hacemos vibrar el teléfono
+                if (data.nueva_alerta) {
+                    lanzarNotificacionLocal(data.titulo, data.mensaje);
+                    
+                    // Si estás justo en la pantalla de solicitudes, recarga para que veas el cambio
+                    if (window.location.pathname.includes('solicitudes_recibidas.php')) {
+                        setTimeout(() => { window.location.reload(); }, 2500);
+                    }
                 }
             })
             .catch(error => console.error('Error revisando notificaciones:', error));

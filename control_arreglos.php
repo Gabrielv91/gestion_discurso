@@ -23,12 +23,63 @@ function formatearTelefonoWA($numero)
     return $limpio;
 }
 
-// 1. Obtener datos de la congregación (Incluimos latitud y longitud para el GPS)
+// 1. Obtener datos de la congregación
 $sql_mi_cong = "SELECT id, nombre, ubicacion_texto, latitud, longitud FROM congregaciones WHERE usuario_id = :uid LIMIT 1";
 $stmt_mi = $conn->prepare($sql_mi_cong);
 $stmt_mi->execute([':uid' => $usuario_id]);
 $mi_cong = $stmt_mi->fetch(PDO::FETCH_ASSOC);
 $mi_cong_id = $mi_cong['id'];
+
+// ==========================================
+// MOTOR: REGLAS DE COLORES (MÁQUINA DE ESTADOS)
+// ==========================================
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['accion']) && $_POST['accion'] === 'nueva_solicitud') {
+    $nuevo_orador_id = $_POST['orador_id'];
+    $nuevo_discurso = $_POST['numero_discurso'];
+    $nueva_fecha = $_POST['fecha'];
+    $nueva_hora = $_POST['hora'];
+    
+    // 1. Buscamos si ya hay ALGO en esa fecha para nuestra congregación
+    $stmt_check_fecha = $conn->prepare("SELECT id, estado FROM solicitudes WHERE congregacion_solicitante_id = ? AND fecha = ?");
+    $stmt_check_fecha->execute([$mi_cong_id, $nueva_fecha]);
+    $solicitud_existente = $stmt_check_fecha->fetch(PDO::FETCH_ASSOC);
+
+    // 2. Determinamos el estado inicial del NUEVO hermano
+    $stmt_check_orador = $conn->prepare("SELECT congregacion_id FROM oradores WHERE id = ?");
+    $stmt_check_orador->execute([$nuevo_orador_id]);
+    $orador_data = $stmt_check_orador->fetch(PDO::FETCH_ASSOC);
+    $nuevo_estado = ($orador_data['congregacion_id'] == $mi_cong_id) ? 'Aprobado' : 'Pendiente';
+
+    // 3. Aplicamos tu Lógica de Colores
+    if ($solicitud_existente) {
+        $estado_actual = $solicitud_existente['estado'];
+        $id_solicitud_vieja = $solicitud_existente['id'];
+
+        if ($estado_actual === 'Aprobado') {
+            // REGLA 1 (VERDE): Está aprobado. CANDADO ACTIVADO.
+            header("Location: control_arreglos.php?error=bloqueado_verde");
+            exit();
+        } else {
+            // REGLA 2 (NARANJA O ROJO): Pendiente o Rechazado. LO PISAMOS (UPDATE).
+            $sql_update = "UPDATE solicitudes SET orador_id = ?, numero_discurso = ?, hora = ?, estado = ? WHERE id = ?";
+            $stmt_upd = $conn->prepare($sql_update);
+            $stmt_upd->execute([$nuevo_orador_id, $nuevo_discurso, $nueva_hora, $nuevo_estado, $id_solicitud_vieja]);
+            
+            header("Location: control_arreglos.php?exito=actualizado");
+            exit();
+        }
+    } else {
+        // REGLA 3 (VACÍO): La fecha está totalmente libre (INSERT).
+        $sql_insert = "INSERT INTO solicitudes (congregacion_solicitante_id, orador_id, numero_discurso, fecha, hora, estado) VALUES (?, ?, ?, ?, ?, ?)";
+        $stmt_ins = $conn->prepare($sql_insert);
+        $stmt_ins->execute([$mi_cong_id, $nuevo_orador_id, $nuevo_discurso, $nueva_fecha, $nueva_hora, $nuevo_estado]);
+        
+        header("Location: control_arreglos.php?exito=nuevo");
+        exit();
+    }
+}
+// ==========================================
+
 
 // CONSULTAS DE HOSPITALIDAD
 $sql_alm = "SELECT id, nombre_familia FROM hogares WHERE congregacion_id = :mi_id AND ofrece_almuerzo = 1 ORDER BY nombre_familia ASC";
@@ -129,13 +180,8 @@ $salidas = $stmt_sal->fetchAll(PDO::FETCH_ASSOC);
             margin: 0;
         }
 
-        .bg-entradas {
-            background-color: #27ae60;
-        }
-
-        .bg-salidas {
-            background-color: #2980b9;
-        }
+        .bg-entradas { background-color: #27ae60; }
+        .bg-salidas { background-color: #2980b9; }
 
         .seccion-cuerpo {
             background: white;
@@ -155,13 +201,8 @@ $salidas = $stmt_sal->fetchAll(PDO::FETCH_ASSOC);
             background: #fafafa;
         }
 
-        .card-aprobado {
-            border-left-color: #2ecc71;
-        }
-
-        .card-pendiente {
-            border-left-color: #f1c40f;
-        }
+        .card-aprobado { border-left-color: #2ecc71; }
+        .card-pendiente { border-left-color: #f1c40f; }
 
         .badge-estado {
             padding: 4px 8px;
@@ -170,15 +211,8 @@ $salidas = $stmt_sal->fetchAll(PDO::FETCH_ASSOC);
             font-weight: bold;
         }
 
-        .badge-Aprobado {
-            background: #d4edda;
-            color: #155724;
-        }
-
-        .badge-Pendiente {
-            background: #fff3cd;
-            color: #856404;
-        }
+        .badge-Aprobado { background: #d4edda; color: #155724; }
+        .badge-Pendiente { background: #fff3cd; color: #856404; }
 
         .btn-wa {
             color: white;
@@ -191,17 +225,9 @@ $salidas = $stmt_sal->fetchAll(PDO::FETCH_ASSOC);
             font-weight: bold;
         }
 
-        .btn-verde {
-            background: #25D366;
-        }
-
-        .btn-naranja {
-            background: #f39c12;
-        }
-
-        .btn-descarga {
-            background: #9b59b6;
-        }
+        .btn-verde { background: #25D366; }
+        .btn-naranja { background: #f39c12; }
+        .btn-descarga { background: #9b59b6; }
 
         .filtro-bar {
             background: white;
@@ -237,9 +263,7 @@ $salidas = $stmt_sal->fetchAll(PDO::FETCH_ASSOC);
             transition: 0.2s;
         }
 
-        .btn-filtro:hover {
-            background: #2c3e50;
-        }
+        .btn-filtro:hover { background: #2c3e50; }
 
         .btn-limpiar {
             background: #ecf0f1;
@@ -266,7 +290,6 @@ $salidas = $stmt_sal->fetchAll(PDO::FETCH_ASSOC);
             flex-wrap: wrap;
         }
 
-        /* Estilos para el Centro de Distribución */
         .dist-center {
             max-width: 1200px;
             margin: 20px auto;
@@ -292,7 +315,6 @@ $salidas = $stmt_sal->fetchAll(PDO::FETCH_ASSOC);
             text-align: center;
         }
 
-        /* --- ADAPTACIÓN MÓVIL AÑADIDA AQUÍ --- */
         @media (max-width: 768px) {
             .header a {
                 display: block !important;
@@ -342,8 +364,7 @@ $salidas = $stmt_sal->fetchAll(PDO::FETCH_ASSOC);
 <body style="background: #ecf0f1;">
     <header class="header" style="background: #2c3e50; color: white; padding: 20px; text-align: center;">
         <h1 style="margin: 0;">Panel Maestro de Arreglos</h1>
-        <p style="margin: 5px 0 0 0;">Congregación: <strong><?php echo htmlspecialchars($mi_cong['nombre']); ?></strong>
-        </p>
+        <p style="margin: 5px 0 0 0;">Congregación: <strong><?php echo htmlspecialchars($mi_cong['nombre']); ?></strong></p>
         <p style="margin-top: 10px;">
             <a href="dashboard.php" style="color: #bdc3c7; text-decoration: underline; margin-right:15px;">Volver al Panel</a>
             <a href="gestionar_hogares.php" style="color: #bdc3c7; text-decoration: underline;">🏠 Gestionar Hospitalidad</a>
@@ -355,24 +376,16 @@ $salidas = $stmt_sal->fetchAll(PDO::FETCH_ASSOC);
 
         <div class="dist-center">
             <div style="display: flex; gap: 10px; align-items: center;">
-                <button onclick="toggleQR()"
-                    style="background: #8e44ad; color: white; border: none; padding: 10px 15px; border-radius: 6px; cursor: pointer; font-weight: bold;">🔳
-                    Ver Código QR</button>
-                <button onclick="copiarEnlaceServicio()"
-                    style="background: #34495e; color: white; border: none; padding: 10px 15px; border-radius: 6px; cursor: pointer; font-weight: bold;">🔗
-                    Copiar Enlace Servicio</button>
-                <span id="aviso-copiado"
-                    style="display: none; color: #27ae60; font-weight: bold; font-size: 0.9em;">¡Copiado!</span>
+                <button onclick="toggleQR()" style="background: #8e44ad; color: white; border: none; padding: 10px 15px; border-radius: 6px; cursor: pointer; font-weight: bold;">🔳 Ver Código QR</button>
+                <button onclick="copiarEnlaceServicio()" style="background: #34495e; color: white; border: none; padding: 10px 15px; border-radius: 6px; cursor: pointer; font-weight: bold;">🔗 Copiar Enlace Servicio</button>
+                <span id="aviso-copiado" style="display: none; color: #27ae60; font-weight: bold; font-size: 0.9em;">¡Copiado!</span>
             </div>
             <div id="qr-area" class="qr-popover" style="display: none;">
                 <h4 style="margin: 0 0 10px 0;">Acceso Departamentos</h4>
                 <img id="qr-img" src="" alt="QR Code">
-                <p style="font-size: 0.8em; color: #666; margin: 10px 0;">Escanea para ver el programa<br>y descargar
-                    archivos.</p>
-                <button onclick="window.print()"
-                    style="font-size: 0.7em; cursor: pointer; padding: 5px 10px;">Imprimir</button>
-                <button onclick="toggleQR()"
-                    style="font-size: 0.7em; cursor: pointer; padding: 5px 10px; margin-left: 5px;">Cerrar</button>
+                <p style="font-size: 0.8em; color: #666; margin: 10px 0;">Escanea para ver el programa<br>y descargar archivos.</p>
+                <button onclick="window.print()" style="font-size: 0.7em; cursor: pointer; padding: 5px 10px;">Imprimir</button>
+                <button onclick="toggleQR()" style="font-size: 0.7em; cursor: pointer; padding: 5px 10px; margin-left: 5px;">Cerrar</button>
             </div>
             <div style="font-size: 0.85em; color: #7f8c8d;">
                 Comparte este link con Sonido y Hospitalidad.
@@ -392,10 +405,7 @@ $salidas = $stmt_sal->fetchAll(PDO::FETCH_ASSOC);
 
                 if (area.style.display === 'none') {
                     const url = getServiceURL();
-
-                    // Usamos una API alternativa (QR Server) que es más amigable con localhost
                     const qrApiUrl = "https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=" + encodeURIComponent(url);
-
                     img.src = qrApiUrl;
                     area.style.display = 'block';
                 } else {
@@ -414,8 +424,7 @@ $salidas = $stmt_sal->fetchAll(PDO::FETCH_ASSOC);
         </script>
 
         <form method="GET" class="filtro-bar">
-            <label style="font-weight: bold; color: #2c3e50; font-size: 1.1em; margin-right: 10px;">📅 Filtrar
-                Fechas:</label>
+            <label style="font-weight: bold; color: #2c3e50; font-size: 1.1em; margin-right: 10px;">📅 Filtrar Fechas:</label>
 
             <div style="display: flex; align-items: center; gap: 8px;">
                 <label for="desde" style="font-size: 0.9em; color: #555; font-weight: bold;">Desde</label>
@@ -440,8 +449,24 @@ $salidas = $stmt_sal->fetchAll(PDO::FETCH_ASSOC);
             </a>
         </form>
 
-        <div class="panel-grid">
+        <?php if (isset($_GET['error']) && $_GET['error'] == 'bloqueado_verde'): ?>
+            <div style="background: #e74c3c; color: white; padding: 15px; border-radius: 8px; margin-bottom: 20px; text-align: center; font-weight: bold; box-shadow: 0 4px 6px rgba(231, 76, 60, 0.3);">
+                🔒 ¡Acción Denegada! Ya hay un arreglo APROBADO (Verde) para esta fecha. Debes cancelarlo primero.
+            </div>
+        <?php endif; ?>
 
+        <?php if (isset($_GET['exito']) && $_GET['exito'] == 'actualizado'): ?>
+            <div style="background: #f39c12; color: white; padding: 15px; border-radius: 8px; margin-bottom: 20px; text-align: center; font-weight: bold;">
+                🔄 ¡Arreglo actualizado! El orador anterior fue reemplazado por el nuevo correctamente.
+            </div>
+        <?php endif; ?>
+
+        <?php if (isset($_GET['exito']) && $_GET['exito'] == 'nuevo'): ?>
+            <div style="background: #27ae60; color: white; padding: 15px; border-radius: 8px; margin-bottom: 20px; text-align: center; font-weight: bold;">
+                ✅ ¡Solicitud guardada correctamente en un día libre!
+            </div>
+        <?php endif; ?>
+        <div class="panel-grid">
             <div>
                 <h2 class="seccion-titulo bg-entradas">📥 Programa en mi Salón</h2>
                 <div class="seccion-cuerpo">
@@ -453,8 +478,7 @@ $salidas = $stmt_sal->fetchAll(PDO::FETCH_ASSOC);
                                 style="<?php echo $es_local ? 'background-color: #f0fdf4; border: 1px solid #c3e6cb; border-left: 5px solid #28a745;' : ''; ?>">
                                 <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
                                     <strong><?php echo date("d/m/Y", strtotime($e['fecha'])); ?></strong>
-                                    <span
-                                        class="badge-estado badge-<?php echo $e['estado']; ?>"><?php echo $e['estado']; ?></span>
+                                    <span class="badge-estado badge-<?php echo $e['estado']; ?>"><?php echo $e['estado']; ?></span>
                                 </div>
                                 <p style="margin: 0 0 5px 0; font-size: 1.1em; color: #2c3e50;">
                                     <strong><?php echo htmlspecialchars($e['orador_nombre'] . " " . $e['orador_apellido']); ?></strong>
@@ -467,14 +491,11 @@ $salidas = $stmt_sal->fetchAll(PDO::FETCH_ASSOC);
                                 <div class="bosquejo-info">
                                     <span style="font-size: 0.9em;">Bosquejo N° <?php echo $e['numero_discurso']; ?></span>
                                     <?php if (!empty($e['cancion'])): ?>
-                                        <span
-                                            style="font-size: 0.85em; color: #8e44ad; background: #f4ecf7; padding: 2px 8px; border-radius: 12px; font-weight: bold;">🎵
-                                            Cant. <?php echo $e['cancion']; ?></span>
+                                        <span style="font-size: 0.85em; color: #8e44ad; background: #f4ecf7; padding: 2px 8px; border-radius: 12px; font-weight: bold;">🎵 Cant. <?php echo $e['cancion']; ?></span>
                                     <?php endif; ?>
 
                                     <?php if (!empty($e['ruta_archivo'])): ?>
-                                        <a href="<?php echo htmlspecialchars($e['ruta_archivo']); ?>" download
-                                            class="btn-wa btn-descarga">📦 Bajar RAR</a>
+                                        <a href="<?php echo htmlspecialchars($e['ruta_archivo']); ?>" download class="btn-wa btn-descarga">📦 Bajar RAR</a>
                                     <?php endif; ?>
                                 </div>
 
@@ -484,8 +505,7 @@ $salidas = $stmt_sal->fetchAll(PDO::FETCH_ASSOC);
                                             $num_c = formatearTelefonoWA($e['coord_telefono']);
                                             $txt_c = rawurlencode("Saludos hermano " . $e['coord_nombre'] . ", le escribo de " . $mi_cong['nombre'] . ". Tenemos una solicitud PENDIENTE para el hermano " . $e['orador_nombre'] . " el " . date("d/m", strtotime($e['fecha'])) . ". ¿Podría aprobarla?");
                                             ?>
-                                            <a href="https://api.whatsapp.com/send?phone=<?php echo $num_c; ?>&text=<?php echo $txt_c; ?>"
-                                                target="_blank" class="btn-wa btn-naranja">📲 Preguntar Coordinador</a>
+                                            <a href="https://api.whatsapp.com/send?phone=<?php echo $num_c; ?>&text=<?php echo $txt_c; ?>" target="_blank" class="btn-wa btn-naranja">📲 Preguntar Coordinador</a>
                                         <?php endif; ?>
 
                                     <?php elseif ($e['estado'] == 'Aprobado'): ?>
@@ -497,17 +517,13 @@ $salidas = $stmt_sal->fetchAll(PDO::FETCH_ASSOC);
 
                                             $txt_o = rawurlencode("Hola hermano " . $e['orador_nombre'] . ".\n\nLo esperamos en " . $mi_cong['nombre'] . " el " . date("d/m", strtotime($e['fecha'])) . " a las " . $h_f . ".\n\nTendrá el bosquejo N° " . $e['numero_discurso'] . $txt_cancion . ".\n\n📍 Dirección: " . $mi_cong['ubicacion_texto'] . "\n🌍 GPS: " . $link_gps . "\n\n¿Usará imágenes? ¿Necesitará hospedaje o comida?");
                                             ?>
-                                            <a href="https://api.whatsapp.com/send?phone=<?php echo $num_o; ?>&text=<?php echo $txt_o; ?>"
-                                                target="_blank" class="btn-wa btn-verde">📲 Escribir al Invitado</a>
+                                            <a href="https://api.whatsapp.com/send?phone=<?php echo $num_o; ?>&text=<?php echo $txt_o; ?>" target="_blank" class="btn-wa btn-verde">📲 Escribir al Invitado</a>
                                         <?php endif; ?>
 
-                                        <div
-                                            style="background-color: #e8f4f8; padding: 12px; border-radius: 6px; margin-top: 15px; border: 1px solid #bce8f1;">
-                                            <form action="guardar_hospitalidad.php" method="POST"
-                                                style="display:flex; flex-direction:column; gap:8px;">
+                                        <div style="background-color: #e8f4f8; padding: 12px; border-radius: 6px; margin-top: 15px; border: 1px solid #bce8f1;">
+                                            <form action="guardar_hospitalidad.php" method="POST" style="display:flex; flex-direction:column; gap:8px;">
                                                 <input type="hidden" name="solicitud_id" value="<?php echo $e['id']; ?>">
-                                                <div
-                                                    style="display:flex; justify-content:space-between; align-items:center; font-size: 0.9em;">
+                                                <div style="display:flex; justify-content:space-between; align-items:center; font-size: 0.9em;">
                                                     <label>Almuerzo:</label>
                                                     <select name="almuerzo_id" style="width: 65%;">
                                                         <option value="">-- Sin asignar --</option>
@@ -518,8 +534,7 @@ $salidas = $stmt_sal->fetchAll(PDO::FETCH_ASSOC);
                                                         <?php endforeach; ?>
                                                     </select>
                                                 </div>
-                                                <div
-                                                    style="display:flex; justify-content:space-between; align-items:center; font-size: 0.9em;">
+                                                <div style="display:flex; justify-content:space-between; align-items:center; font-size: 0.9em;">
                                                     <label>Hospedaje:</label>
                                                     <select name="hospedaje_id" style="width: 65%;">
                                                         <option value="">-- Sin asignar --</option>
@@ -530,9 +545,7 @@ $salidas = $stmt_sal->fetchAll(PDO::FETCH_ASSOC);
                                                         <?php endforeach; ?>
                                                     </select>
                                                 </div>
-                                                <button type="submit"
-                                                    style="background:#3498db; color:white; border:none; padding:6px; border-radius:4px; cursor:pointer;">💾
-                                                    Guardar / Actualizar</button>
+                                                <button type="submit" style="background:#3498db; color:white; border:none; padding:6px; border-radius:4px; cursor:pointer;">💾 Guardar / Actualizar</button>
                                             </form>
                                         </div>
                                     <?php endif; ?>
@@ -553,26 +566,21 @@ $salidas = $stmt_sal->fetchAll(PDO::FETCH_ASSOC);
                             <div class="card-arreglo card-<?php echo strtolower($s['estado']); ?>">
                                 <div style="display: flex; justify-content: space-between;">
                                     <strong><?php echo date("d/m/Y", strtotime($s['fecha'])); ?></strong>
-                                    <span
-                                        class="badge-estado badge-<?php echo $s['estado']; ?>"><?php echo $s['estado']; ?></span>
+                                    <span class="badge-estado badge-<?php echo $s['estado']; ?>"><?php echo $s['estado']; ?></span>
                                 </div>
                                 <p style="margin: 10px 0 5px 0;">
                                     <strong><?php echo htmlspecialchars($s['orador_nombre'] . " " . $s['orador_apellido']); ?></strong>
                                 </p>
-                                <p style="margin: 0; font-size: 0.9em;">Hacia:
-                                    <?php echo htmlspecialchars($s['cong_destino']); ?>
-                                </p>
+                                <p style="margin: 0; font-size: 0.9em;">Hacia: <?php echo htmlspecialchars($s['cong_destino']); ?></p>
                                 <div class="bosquejo-info">
                                     <span>Bosquejo N° <?php echo $s['numero_discurso']; ?></span>
-                                    <?php if (!empty($s['cancion'])): ?><span style="color:#8e44ad; font-weight:bold;">🎵 Cant.
-                                            <?php echo $s['cancion']; ?></span><?php endif; ?>
+                                    <?php if (!empty($s['cancion'])): ?><span style="color:#8e44ad; font-weight:bold;">🎵 Cant. <?php echo $s['cancion']; ?></span><?php endif; ?>
                                 </div>
                                 <?php if (!empty($s['telefono'])):
                                     $num_s = formatearTelefonoWA($s['telefono']);
                                     $txt_s = rawurlencode("Hermano " . $s['orador_nombre'] . ", le recuerdo su salida el " . date("d/m", strtotime($s['fecha'])) . " a " . $s['cong_destino'] . ". Bosquejo N° " . $s['numero_discurso'] . ($s['cancion'] ? " con canción " . $s['cancion'] : "") . ".");
                                     ?>
-                                    <a href="https://api.whatsapp.com/send?phone=<?php echo $num_s; ?>&text=<?php echo $txt_s; ?>"
-                                        target="_blank" class="btn-wa btn-verde">📲 Recordar Salida</a>
+                                    <a href="https://api.whatsapp.com/send?phone=<?php echo $num_s; ?>&text=<?php echo $txt_s; ?>" target="_blank" class="btn-wa btn-verde">📲 Recordar Salida</a>
                                 <?php endif; ?>
                             </div>
                         <?php endforeach; ?>
