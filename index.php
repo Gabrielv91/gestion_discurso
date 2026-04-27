@@ -4,6 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Iniciar Sesión | Sistema de Discursos</title>
+    
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#2c3e50">
+    <link rel="apple-touch-icon" href="icono-192.png">
+
     <style>
         /* ESTILOS PREMIUM PARA EL LOGIN */
         body { 
@@ -75,6 +80,31 @@
         
         .link-recuperar { color: #e67e22 !important; }
         .link-recuperar:hover { color: #d35400 !important; }
+
+        /* ESTILOS DEL BOTÓN PWA FLOTANTE */
+        #btn-instalar {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background-color: #f39c12;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 50px;
+            font-size: 1em;
+            font-weight: bold;
+            box-shadow: 0 4px 15px rgba(243, 156, 18, 0.4);
+            cursor: pointer;
+            z-index: 9999;
+            transition: transform 0.3s, background-color 0.3s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        #btn-instalar:hover {
+            background-color: #d68910;
+            transform: scale(1.05);
+        }
     </style>
 </head>
 <body>
@@ -111,7 +141,58 @@
         </div>
     </main>
 
-    <button id="btn-instalar" style="display: none;">Instalar App</button>
+    <button id="btn-instalar" style="display: none;">📲 Instalar App</button>
+    
     <script src="js/app.js"></script>
+
+    <script>
+        let eventoInstalacion = null;
+        const btnInstalar = document.getElementById('btn-instalar');
+
+        // 1. Registramos el Service Worker silenciosamente al entrar al login
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('sw.js');
+            });
+        }
+
+        // 2. Comprobamos si la app YA está instalada (pantalla completa)
+        if (window.matchMedia('(display-mode: standalone)').matches) {
+            btnInstalar.style.display = 'none';
+        }
+
+        // 3. Escuchamos al navegador para ver si nos da permiso de mostrar el botón
+        window.addEventListener('beforeinstallprompt', (e) => {
+            // Evitamos que salga el banner feo nativo de Android
+            e.preventDefault();
+            // Guardamos el evento para dispararlo cuando toquen nuestro botón naranja
+            eventoInstalacion = e;
+            // ¡Mostramos nuestro botón flotante!
+            btnInstalar.style.display = 'flex';
+        });
+
+        // 4. Qué pasa cuando tocan el botón naranja
+        btnInstalar.addEventListener('click', async () => {
+            if (!eventoInstalacion) return;
+            
+            // Disparamos la ventana de instalación del sistema operativo
+            eventoInstalacion.prompt();
+            
+            // Esperamos la respuesta del usuario
+            const { outcome } = await eventoInstalacion.userChoice;
+            if (outcome === 'accepted') {
+                console.log('El usuario instaló la App');
+            }
+            
+            // Limpiamos y ocultamos el botón
+            eventoInstalacion = null;
+            btnInstalar.style.display = 'none';
+        });
+
+        // 5. Si la app se instala con éxito, el botón se oculta automáticamente
+        window.addEventListener('appinstalled', () => {
+            btnInstalar.style.display = 'none';
+        });
+    </script>
 </body>
 </html>
