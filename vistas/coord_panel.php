@@ -452,7 +452,7 @@ if ($perfil) {
     setInterval(verificarNuevasSolicitudes, 30000); 
 
     function verificarNuevasSolicitudes() {
-        fetch('chequear_notificaciones.php')
+       fetch('chequear_notificaciones.php?nocache=' + new Date().getTime())
             .then(response => response.json())
             .then(data => {
                 

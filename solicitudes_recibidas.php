@@ -257,7 +257,7 @@ foreach($solicitudes as $s) {
         let cantidadPendientesAnterior = <?php echo $pendientes_actuales; ?>;
 
         function verificarNuevasSolicitudes() {
-            fetch('chequear_notificaciones.php')
+           fetch('chequear_notificaciones.php?nocache=' + new Date().getTime())
                 .then(response => response.json())
                 .then(data => {
                     let nuevasPendientes = parseInt(data.total_pendientes);
