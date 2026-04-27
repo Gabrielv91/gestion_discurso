@@ -53,9 +53,9 @@ foreach($solicitudes as $s) {
     <link rel="apple-touch-icon" href="icono-192.png">
     
     <style>
-        /* --- ADAPTACIÓN MÓVIL Y ESTILOS DE BOTONES --- */
+        /* --- ESTILOS GENERALES DE LA VISTA --- */
         .btn-consulta {
-            background-color: #2ecc71; /* Verde más claro para diferenciarlo */
+            background-color: #2ecc71; 
             color: white;
             text-decoration: none;
             text-align: center;
@@ -67,60 +67,117 @@ foreach($solicitudes as $s) {
             transition: 0.3s;
         }
         .btn-consulta:hover { background-color: #27ae60; }
+        
+        .tabla-admin { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        .tabla-admin th, .tabla-admin td { padding: 12px; border-bottom: 1px solid #ddd; text-align: left; }
+        .tabla-admin th { background-color: #2c3e50; color: white; }
 
+        /* =========================================
+           DISEÑO RESPONSIVO: TABLA A TARJETAS
+           ========================================= */
         @media (max-width: 768px) {
             header { padding: 15px; }
             h1 { font-size: 1.5em; margin-bottom: 10px; }
             main { padding: 10px !important; }
-            
             .admin-container { padding: 15px 10px; margin: 0; width: 100%; box-sizing: border-box; }
             
-            div[style*="overflow-x: auto"] {
-                padding-bottom: 10px;
-                -webkit-overflow-scrolling: touch;
+            /* Forzar que la tabla se comporte como bloques */
+            table, thead, tbody, th, td, tr {
+                display: block;
+                width: 100%;
+                box-sizing: border-box;
+            }
+            
+            /* Ocultar el encabezado clásico de la tabla */
+            thead tr {
+                display: none;
+            }
+            
+            /* Estilo de Tarjeta para cada fila */
+            tr {
+                background: white;
+                margin-bottom: 20px;
+                border-radius: 12px;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+                padding: 15px;
+                border: 1px solid #ecf0f1;
+            }
+            
+            /* Estilo de cada celda dentro de la tarjeta */
+            td {
+                text-align: right;
+                padding: 10px 0;
+                position: relative;
+                border: none;
+                border-bottom: 1px solid #f9f9f9;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                font-size: 0.95em;
+            }
+            
+            /* Quitar borde a la última celda (la de los botones) */
+            td:last-child {
+                border-bottom: none;
+                flex-direction: column; 
+                gap: 10px;
+                margin-top: 15px;
+                padding-bottom: 0;
+            }
+            
+            /* Usar el atributo data-label como título a la izquierda */
+            td::before {
+                content: attr(data-label);
+                font-weight: bold;
+                color: #7f8c8d;
+                text-align: left;
+                flex: 1; /* El título toma el espacio necesario */
             }
 
-            /* Apilamos los botones de acción para que sean anchos y fáciles de tocar */
-            td div.acciones-grupo {
+            /* Estilos específicos para los contenedores de botones en móvil */
+            .acciones-grupo {
                 display: flex !important;
                 flex-direction: column !important;
                 align-items: stretch !important;
-                gap: 8px !important;
+                gap: 10px !important;
+                width: 100%;
             }
             
-            td div.acciones-grupo a {
+            .botones-decision {
+                display: flex !important;
+                flex-direction: row !important;
+                gap: 10px !important;
                 width: 100% !important;
-                box-sizing: border-box !important;
-                padding: 10px !important;
-                font-size: 0.95em !important;
-                text-align: center !important;
-                border-radius: 6px !important;
-                margin: 0 !important;
             }
 
-            .botones-decision {
-                display: flex;
-                flex-direction: row !important;
-                gap: 8px;
-                width: 100%;
+            /* Hacer que los botones sean anchos y cómodos */
+            .btn-consulta, .btn-aprobar, .btn-rechazar {
+                width: 100% !important;
+                box-sizing: border-box !important;
+                padding: 14px 10px !important;
+                font-size: 1.05em !important;
+                text-align: center !important;
+                border-radius: 8px !important;
+                margin: 0 !important;
+                display: block;
             }
         }
     </style>
 </head>
 <body>
-    <header>
-        <h1>Solicitudes Recibidas</h1>
-        <p><a href="dashboard.php" style="color: white; text-decoration: underline;">Volver al Panel</a></p>
+    <header style="background: #2c3e50; color: white; padding: 20px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+        <h1 style="margin:0;">Solicitudes Recibidas</h1>
+        <p style="margin: 5px 0 0 0;"><a href="dashboard.php" style="color: #3498db; text-decoration: none; font-weight: bold;">⬅ Volver al Panel</a></p>
     </header>
 
-    <main style="padding: 20px;">
-        <div class="admin-container">
-            <h2>Peticiones de otras congregaciones</h2>
-            <p>Aquí aparecen los hermanos que te han solicitado para dar discursos fuera (Eventos próximos).</p>
+    <main style="padding: 20px; max-width: 1000px; margin: 0 auto;">
+        <div class="admin-container" style="background: white; padding: 25px; border-radius: 12px; box-shadow: 0 5px 15px rgba(0,0,0,0.05);">
+            <h2 style="margin-top: 0; color: #2c3e50; border-bottom: 2px solid #ecf0f1; padding-bottom: 10px;">Peticiones de otras congregaciones</h2>
+            <p style="color: #7f8c8d;">Aquí aparecen los hermanos que te han solicitado para dar discursos fuera (Eventos próximos).</p>
 
             <?php if (count($solicitudes) > 0): ?>
-                <div style="overflow-x: auto;">
-                    <table class="tabla-admin" style="min-width: 600px;">
+                <div style="overflow-x: auto; padding-bottom: 15px;">
+                    <table class="tabla-admin">
                         <thead>
                             <tr>
                                 <th>Fecha/Hora</th>
@@ -172,16 +229,18 @@ foreach($solicitudes as $s) {
                                 $enlace_wa_aprobado = "https://api.whatsapp.com/send?phone=" . $numero_wa . "&text=" . urlencode($texto_wa_aprobado);
                             ?>
                                 <tr>
-                                    <td><?php echo $fecha_formateada . " <br> " . $hora_formateada; ?></td>
-                                    <td><strong><?php echo htmlspecialchars($s['orador_nom'] . " " . $s['orador_ape']); ?></strong></td>
-                                    <td>B-<?php echo htmlspecialchars($s['numero_discurso']); ?></td>
-                                    <td><?php echo htmlspecialchars($s['cong_solicitante']); ?></td>
-                                    <td>
-                                        <span style="font-weight: bold; color: <?php echo ($s['estado'] == 'Pendiente') ? '#f39c12' : ($s['estado'] == 'Aprobado' ? '#27ae60' : '#e74c3c'); ?>;">
+                                    <td data-label="Fecha/Hora"><?php echo $fecha_formateada . " <br> <small style='color:#7f8c8d;'>" . $hora_formateada . "</small>"; ?></td>
+                                    <td data-label="Orador"><strong><?php echo htmlspecialchars($s['orador_nom'] . " " . $s['orador_ape']); ?></strong></td>
+                                    <td data-label="Tema">B-<?php echo htmlspecialchars($s['numero_discurso']); ?></td>
+                                    <td data-label="Solicita"><?php echo htmlspecialchars($s['cong_solicitante']); ?></td>
+                                    <td data-label="Estado">
+                                        <span style="font-weight: bold; padding: 4px 10px; border-radius: 20px; font-size: 0.85em;
+                                            background-color: <?php echo ($s['estado'] == 'Pendiente') ? '#fcf3cf' : ($s['estado'] == 'Aprobado' ? '#d5f5e3' : '#fadbd8'); ?>;
+                                            color: <?php echo ($s['estado'] == 'Pendiente') ? '#b9770e' : ($s['estado'] == 'Aprobado' ? '#1e8449' : '#c0392b'); ?>;">
                                             <?php echo htmlspecialchars($s['estado']); ?>
                                         </span>
                                     </td>
-                                    <td style="white-space: nowrap;">
+                                    <td data-label="Acciones">
                                         
                                         <?php if ($s['estado'] == 'Pendiente'): ?>
                                             <div class="acciones-grupo">
@@ -189,39 +248,38 @@ foreach($solicitudes as $s) {
                                                     💬 1. Preguntar a Orador
                                                 </a>
                                                 
-                                                <div class="botones-decision" style="display: flex; gap: 8px;">
+                                                <div class="botones-decision">
                                                     <a href="procesar_respuesta_solicitud.php?id=<?php echo $s['id']; ?>&accion=Aprobado" 
                                                        class="btn-aprobar" 
-                                                       style="flex: 1; text-decoration: none; text-align: center; margin: 0;">✅ Aprobar</a>
+                                                       style="flex: 1; text-decoration: none; text-align: center; margin: 0; background-color:#27ae60; color:white; font-weight:bold;">✅ Aprobar</a>
                                                        
                                                     <a href="procesar_respuesta_solicitud.php?id=<?php echo $s['id']; ?>&accion=Rechazado" 
                                                        class="btn-rechazar" 
-                                                       style="flex: 1; text-decoration: none; text-align: center; margin: 0;" 
+                                                       style="flex: 1; text-decoration: none; text-align: center; margin: 0; background-color:#e74c3c; color:white; font-weight:bold;" 
                                                        onclick="return confirm('¿Rechazar esta solicitud?');">❌ Rechazar</a>
                                                 </div>
                                             </div>
 
                                         <?php elseif ($s['estado'] == 'Aprobado'): ?>
-                                            <div class="acciones-grupo" style="display: flex; gap: 8px; align-items: center;">
-                                                <a href="procesar_respuesta_solicitud.php?id=<?php echo $s['id']; ?>&accion=Pendiente" 
-                                                   class="btn-rechazar" 
-                                                   style="text-decoration: none; text-align: center; margin: 0; background-color: #95a5a6;" 
-                                                   onclick="return confirm('¿Seguro que deseas anular esta aprobación y devolverla a Pendiente?');">Deshacer</a>
-                                                
+                                            <div class="acciones-grupo">
                                                 <a href="<?php echo $enlace_wa_aprobado; ?>" 
                                                    target="_blank" 
                                                    class="btn-aprobar" 
-                                                   style="text-decoration: none; text-align: center; margin: 0; background-color: #25D366; color: white;">
+                                                   style="text-decoration: none; text-align: center; margin: 0; background-color: #25D366; color: white; font-weight:bold;">
                                                    📲 Enviar Confirmación
                                                 </a>
+                                                <a href="procesar_respuesta_solicitud.php?id=<?php echo $s['id']; ?>&accion=Pendiente" 
+                                                   class="btn-rechazar" 
+                                                   style="text-decoration: none; text-align: center; margin: 0; background-color: #95a5a6; color:white; font-weight:bold;" 
+                                                   onclick="return confirm('¿Seguro que deseas anular esta aprobación y devolverla a Pendiente?');">Deshacer a Pendiente</a>
                                             </div>
 
                                         <?php elseif ($s['estado'] == 'Rechazado'): ?>
-                                            <div class="acciones-grupo" style="display: flex; gap: 8px; align-items: center;">
+                                            <div class="acciones-grupo">
                                                 <a href="procesar_respuesta_solicitud.php?id=<?php echo $s['id']; ?>&accion=Pendiente" 
                                                    class="btn-rechazar" 
-                                                   style="text-decoration: none; text-align: center; margin: 0; background-color: #95a5a6;" 
-                                                   onclick="return confirm('¿Seguro que deseas anular este rechazo y devolverlo a Pendiente?');">Deshacer</a>
+                                                   style="text-decoration: none; text-align: center; margin: 0; background-color: #95a5a6; color:white; font-weight:bold;" 
+                                                   onclick="return confirm('¿Seguro que deseas anular este rechazo y devolverlo a Pendiente?');">Deshacer a Pendiente</a>
                                             </div>
                                         <?php endif; ?>
                                         
@@ -232,7 +290,10 @@ foreach($solicitudes as $s) {
                     </table>
                 </div>
             <?php else: ?>
-                <div class="mensaje-vacio"><p>No tienes solicitudes pendientes ni futuras de otras congregaciones por ahora.</p></div>
+                <div style="background: #fdfdfd; border: 2px dashed #bdc3c7; padding: 40px 20px; text-align: center; border-radius: 12px; color: #7f8c8d; margin-top: 20px;">
+                    <h3 style="margin-top: 0;">Todo está al día</h3>
+                    <p style="margin-bottom: 0;">No tienes solicitudes pendientes ni futuras de otras congregaciones por ahora.</p>
+                </div>
             <?php endif; ?>
         </div>
     </main>

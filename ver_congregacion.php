@@ -153,6 +153,40 @@ $fecha_formateada = date("d/m/Y", strtotime($fecha_buscada));
         .btn-ver:hover { background: #2980b9; }
         
         .info-box { background: #e8f4f8; border-left: 4px solid #3498db; padding: 15px; margin-bottom: 25px; border-radius: 4px; font-size: 0.9em; color: #2c3e50; line-height: 1.5; }
+
+        /* =========================================
+           DISEÑO RESPONSIVO PARA TELÉFONOS
+           ========================================= */
+        @media (max-width: 768px) {
+            .form-solicitud {
+                flex-direction: column; /* Apila el select y el botón verticalmente */
+                gap: 10px;
+                padding: 12px;
+            }
+            
+            .select-discurso {
+                width: 100%;
+                box-sizing: border-box; /* Asegura que el padding no desborde la caja */
+                padding: 12px;
+            }
+            
+            .btn-pedir {
+                width: 100%;
+                box-sizing: border-box;
+                padding: 14px;
+                font-size: 1.05em;
+            }
+
+            .orador-header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 8px;
+            }
+            
+            .etiqueta-espir {
+                align-self: flex-start; /* Mantiene la etiqueta alineada a la izquierda */
+            }
+        }
     </style>
 </head>
 <body>
