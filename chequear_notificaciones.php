@@ -3,7 +3,6 @@
 session_start();
 require_once 'conexion/conexion.php';
 
-// Si no hay sesión, respondemos vacío
 if (!isset($_SESSION['usuario_id'])) {
     echo json_encode(['total_pendientes' => 0, 'nueva_alerta' => false]);
     exit();
@@ -13,7 +12,6 @@ $baseDatos = new Conexion();
 $conn = $baseDatos->obtenerConexion();
 $usuario_id = $_SESSION['usuario_id'];
 
-// Obtener ID de la congregación actual
 $stmt = $conn->prepare("SELECT id FROM congregaciones WHERE usuario_id = ? LIMIT 1");
 $stmt->execute([$usuario_id]);
 $mi_cong_id = $stmt->fetchColumn();
@@ -23,7 +21,7 @@ if (!$mi_cong_id) {
     exit();
 }
 
-// 1. Contar total de pendientes (Mantenemos el filtro aquí para que el globito rojo no cuente los locales)
+// 1. Contar total de pendientes
 $sql_pendientes = "SELECT COUNT(*) FROM solicitudes s
                    INNER JOIN oradores o ON s.orador_id = o.id
                    WHERE o.congregacion_id = ? 
@@ -34,19 +32,28 @@ $stmt_pend = $conn->prepare($sql_pendientes);
 $stmt_pend->execute([$mi_cong_id, $mi_cong_id]);
 $total_pendientes = $stmt_pend->fetchColumn();
 
-// 2. Buscar UNA notificación nueva que no hayas leído (notificado = 0)
-// LE QUITAMOS EL FILTRO: Ahora te avisará de cancelaciones sin importar quién solicitó el arreglo.
-$sql_notif = "SELECT s.id, s.estado, s.fecha, o.nombre, o.apellido, c.nombre as cong_destino
+// 2. RADAR BIDIRECCIONAL (¡AHORA CON LOS PARÉNTESIS CORRECTOS!)
+$sql_notif = "SELECT s.id, s.estado, s.fecha, o.nombre, o.apellido, s.notificado,
+                     c_solicita.nombre as cong_solicitante, 
+                     c_origen.nombre as cong_origen
               FROM solicitudes s
               INNER JOIN oradores o ON s.orador_id = o.id
-              INNER JOIN congregaciones c ON s.congregacion_solicitante_id = c.id
-              WHERE o.congregacion_id = ? 
-              AND s.notificado = 0
+              INNER JOIN congregaciones c_solicita ON s.congregacion_solicitante_id = c_solicita.id
+              INNER JOIN congregaciones c_origen ON o.congregacion_id = c_origen.id
+              WHERE 
+                (
+                    (o.congregacion_id = :mi_id_origen AND s.notificado = 0) 
+                    OR 
+                    (s.congregacion_solicitante_id = :mi_id_destino AND s.notificado = 2)
+                )
               AND s.fecha >= CURDATE()
               LIMIT 1";
+
 $stmt_notif = $conn->prepare($sql_notif);
-// ¡Importante! Ahora el execute solo recibe UN parámetro ($mi_cong_id) porque solo hay un "?" en la consulta
-$stmt_notif->execute([$mi_cong_id]); 
+$stmt_notif->execute([
+    ':mi_id_origen' => $mi_cong_id, 
+    ':mi_id_destino' => $mi_cong_id
+]); 
 $alerta = $stmt_notif->fetch(PDO::FETCH_ASSOC);
 
 $respuesta = [
@@ -54,22 +61,37 @@ $respuesta = [
     'nueva_alerta' => false
 ];
 
-// Si encontró algo nuevo, preparamos el mensaje para el celular
 if ($alerta) {
     $fecha_formateada = date("d/m/Y", strtotime($alerta['fecha']));
     $nombre_orador = $alerta['nombre'] . " " . $alerta['apellido'];
     
-    if ($alerta['estado'] == 'Rechazado') {
-        $respuesta['titulo'] = "❌ ¡Arreglo Cancelado!";
-        $respuesta['mensaje'] = "El discurso de $nombre_orador para el $fecha_formateada en " . $alerta['cong_destino'] . " ha sido cancelado.";
-    } else {
-        $respuesta['titulo'] = "🔔 ¡Nueva Solicitud!";
-        $respuesta['mensaje'] = "La congregación " . $alerta['cong_destino'] . " solicita a $nombre_orador para el $fecha_formateada.";
+    // ESCENARIO A: Yo soy el Dueño del orador
+    if ($alerta['notificado'] == 0) {
+        if ($alerta['estado'] == 'Rechazado') {
+            $respuesta['titulo'] = "❌ ¡Arreglo Cancelado!";
+            $respuesta['mensaje'] = "La congregación " . $alerta['cong_solicitante'] . " canceló el discurso de $nombre_orador para el $fecha_formateada.";
+        } else {
+            $respuesta['titulo'] = "🔔 ¡Nueva Solicitud!";
+            $respuesta['mensaje'] = "La congregación " . $alerta['cong_solicitante'] . " solicita a $nombre_orador para el $fecha_formateada.";
+        }
+    } 
+    // ESCENARIO B: Yo soy quien Solicitó al orador
+    elseif ($alerta['notificado'] == 2) {
+        if ($alerta['estado'] == 'Aprobado') {
+            $respuesta['titulo'] = "✅ ¡Solicitud Aprobada!";
+            $respuesta['mensaje'] = "La congregación " . $alerta['cong_origen'] . " aprobó la visita de $nombre_orador para el $fecha_formateada.";
+        } elseif ($alerta['estado'] == 'Rechazado') {
+            $respuesta['titulo'] = "❌ Arreglo Caído / Rechazado";
+            $respuesta['mensaje'] = "La congregación " . $alerta['cong_origen'] . " no puede enviar a $nombre_orador para el $fecha_formateada.";
+        } else {
+            $respuesta['titulo'] = "⏳ Cambio de Estado";
+            $respuesta['mensaje'] = "La solicitud de $nombre_orador ha vuelto a estado Pendiente.";
+        }
     }
 
     $respuesta['nueva_alerta'] = true;
 
-    // La marcamos como leída para que el teléfono no suene dos veces por lo mismo
+    // Apagamos la alarma
     $conn->prepare("UPDATE solicitudes SET notificado = 1 WHERE id = ?")->execute([$alerta['id']]);
 }
 
