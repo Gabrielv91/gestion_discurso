@@ -1,11 +1,29 @@
 <?php
 // generar_pdf_anuncios.php
+session_start(); // ¡Clave! Arrancar la sesión para saber quién está conectado
 require_once 'conexion/conexion.php';
+
+// Si no hay sesión, pa' fuera
+if (!isset($_SESSION['usuario_id'])) {
+    die("Acceso denegado. Inicie sesión primero.");
+}
 
 $baseDatos = new Conexion();
 $conn = $baseDatos->obtenerConexion();
+$usuario_id = $_SESSION['usuario_id'];
 
-$mi_cong_id = 1; // Barrancas
+// 1. OBTENER EL ID DE LA CONGREGACIÓN Y SU NOMBRE
+$sql_mi_cong = "SELECT id, nombre FROM congregaciones WHERE usuario_id = :uid LIMIT 1";
+$stmt_mi = $conn->prepare($sql_mi_cong);
+$stmt_mi->execute([':uid' => $usuario_id]);
+$mi_cong = $stmt_mi->fetch(PDO::FETCH_ASSOC);
+
+if (!$mi_cong) {
+    die("Error: No se encontró la congregación asociada a este usuario.");
+}
+
+$mi_cong_id = $mi_cong['id'];
+$nombre_mi_cong = $mi_cong['nombre']; // Usaremos esto para el título del PDF
 
 date_default_timezone_set('America/Caracas');
 $fecha_hoy = date('Y-m-d');
@@ -66,7 +84,7 @@ setlocale(LC_TIME, 'es_ES.UTF-8', 'es_ES', 'esp');
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Programa de Discursos - Barrancas</title>
+    <title>Programa de Discursos - <?php echo htmlspecialchars($nombre_mi_cong); ?></title>
     <style>
         @page { size: letter; margin: 10mm; }
         body { font-family: 'Segoe UI', Arial, sans-serif; margin: 0; background: white; color: #333; font-size: 10pt; }
@@ -102,7 +120,7 @@ setlocale(LC_TIME, 'es_ES.UTF-8', 'es_ES', 'esp');
 
 <div class="header">
     <h1>Programa de Reuniones del Fin de Semana</h1>
-    <p style="margin:0; font-weight:bold; color: #7f8c8d;">Congregación Barrancas</p>
+    <p style="margin:0; font-weight:bold; color: #7f8c8d;">Congregación <?php echo htmlspecialchars($nombre_mi_cong); ?></p>
 </div>
 
 <div class="main-grid">

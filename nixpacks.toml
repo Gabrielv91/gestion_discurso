@@ -1,0 +1,9 @@
+[phases.setup]
+nixPkgs = ["php82"] 
+
+[phases.build]
+cmds = [
+    "echo 'upload_max_filesize = 50M' > /etc/php.d/custom.ini",
+    "echo 'post_max_size = 50M' >> /etc/php.d/custom.ini",
+    "echo 'client_max_body_size 50M;' > /etc/nginx/conf.d/custom.conf"
+]
