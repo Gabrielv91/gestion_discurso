@@ -1,5 +1,4 @@
 [phases.build]
 cmds = [
-    "mkdir -p /etc/nginx/conf.d",
-    "echo 'client_max_body_size 50M;' > /etc/nginx/conf.d/limites_peso.conf"
+    "sed -i 's/http {/http { client_max_body_size 50M;/g' /assets/nginx.template.conf"
 ]
