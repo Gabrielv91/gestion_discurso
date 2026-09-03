@@ -23,8 +23,8 @@ function formatearTelefonoWA($numero)
     return $limpio;
 }
 
-// 1. Obtener datos de la congregación
-$sql_mi_cong = "SELECT id, nombre, ubicacion_texto, latitud, longitud FROM congregaciones WHERE usuario_id = :uid LIMIT 1";
+// 1. Obtener datos de la congregación incluyendo día y hora
+$sql_mi_cong = "SELECT id, nombre, ubicacion_texto, latitud, longitud, dia_reunion, hora_reunion FROM congregaciones WHERE usuario_id = :uid LIMIT 1";
 $stmt_mi = $conn->prepare($sql_mi_cong);
 $stmt_mi->execute([':uid' => $usuario_id]);
 $mi_cong = $stmt_mi->fetch(PDO::FETCH_ASSOC);
@@ -56,11 +56,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['accion']) && $_POST['
         $id_solicitud_vieja = $solicitud_existente['id'];
 
         if ($estado_actual === 'Aprobado') {
-            // REGLA 1 (VERDE): Está aprobado. CANDADO ACTIVADO.
             header("Location: control_arreglos.php?error=bloqueado_verde");
             exit();
         } else {
-            // REGLA 2 (NARANJA O ROJO): Pendiente o Rechazado. LO PISAMOS (UPDATE).
             $sql_update = "UPDATE solicitudes SET orador_id = ?, numero_discurso = ?, hora = ?, estado = ? WHERE id = ?";
             $stmt_upd = $conn->prepare($sql_update);
             $stmt_upd->execute([$nuevo_orador_id, $nuevo_discurso, $nueva_hora, $nuevo_estado, $id_solicitud_vieja]);
@@ -69,7 +67,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['accion']) && $_POST['
             exit();
         }
     } else {
-        // REGLA 3 (VACÍO): La fecha está totalmente libre (INSERT).
         $sql_insert = "INSERT INTO solicitudes (congregacion_solicitante_id, orador_id, numero_discurso, fecha, hora, estado) VALUES (?, ?, ?, ?, ?, ?)";
         $stmt_ins = $conn->prepare($sql_insert);
         $stmt_ins->execute([$mi_cong_id, $nuevo_orador_id, $nuevo_discurso, $nueva_fecha, $nueva_hora, $nuevo_estado]);
@@ -79,7 +76,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['accion']) && $_POST['
     }
 }
 // ==========================================
-
 
 // CONSULTAS DE HOSPITALIDAD
 $sql_alm = "SELECT id, nombre_familia FROM hogares WHERE congregacion_id = :mi_id AND ofrece_almuerzo = 1 ORDER BY nombre_familia ASC";
@@ -129,11 +125,11 @@ $stmt_ent = $conn->prepare($sql_entradas);
 $stmt_ent->execute($params_ent);
 $entradas = $stmt_ent->fetchAll(PDO::FETCH_ASSOC);
 
-// BLOQUE 2: SALIDAS
+// BLOQUE 2: SALIDAS (Ahora incluye el día y hora de la congregación de destino)
 $sql_salidas = "
     SELECT s.id, s.fecha, s.hora, s.numero_discurso, s.estado,
            o.nombre AS orador_nombre, o.apellido AS orador_apellido, o.telefono,
-           c.nombre AS cong_destino, c.coord_nombre,
+           c.nombre AS cong_destino, c.coord_nombre, c.dia_reunion, c.hora_reunion,
            d.ruta_archivo, d.cancion
     FROM solicitudes s
     INNER JOIN oradores o ON s.orador_id = o.id
@@ -158,205 +154,40 @@ $salidas = $stmt_sal->fetchAll(PDO::FETCH_ASSOC);
     <title>Panel Maestro de Arreglos</title>
     <link rel="stylesheet" href="css/style.css">
     <style>
-        .panel-grid {
-            display: grid;
-            grid-template-columns: 1fr;
-            gap: 30px;
-            margin-top: 20px;
-        }
-
-        @media(min-width: 800px) {
-            .panel-grid {
-                grid-template-columns: 1fr 1fr;
-            }
-        }
-
-        .seccion-titulo {
-            padding: 15px;
-            color: white;
-            border-radius: 8px 8px 0 0;
-            font-size: 1.2em;
-            text-align: center;
-            margin: 0;
-        }
-
+        .panel-grid { display: grid; grid-template-columns: 1fr; gap: 30px; margin-top: 20px; }
+        @media(min-width: 800px) { .panel-grid { grid-template-columns: 1fr 1fr; } }
+        .seccion-titulo { padding: 15px; color: white; border-radius: 8px 8px 0 0; font-size: 1.2em; text-align: center; margin: 0; }
         .bg-entradas { background-color: #27ae60; }
         .bg-salidas { background-color: #2980b9; }
-
-        .seccion-cuerpo {
-            background: white;
-            padding: 20px;
-            border: 1px solid #ddd;
-            border-top: none;
-            border-radius: 0 0 8px 8px;
-            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
-        }
-
-        .card-arreglo {
-            border: 1px solid #eee;
-            border-left: 5px solid #ccc;
-            padding: 15px;
-            margin-bottom: 15px;
-            border-radius: 6px;
-            background: #fafafa;
-        }
-
+        .seccion-cuerpo { background: white; padding: 20px; border: 1px solid #ddd; border-top: none; border-radius: 0 0 8px 8px; box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05); }
+        .card-arreglo { border: 1px solid #eee; border-left: 5px solid #ccc; padding: 15px; margin-bottom: 15px; border-radius: 6px; background: #fafafa; }
         .card-aprobado { border-left-color: #2ecc71; }
         .card-pendiente { border-left-color: #f1c40f; }
-
-        .badge-estado {
-            padding: 4px 8px;
-            border-radius: 12px;
-            font-size: 0.8em;
-            font-weight: bold;
-        }
-
+        .badge-estado { padding: 4px 8px; border-radius: 12px; font-size: 0.8em; font-weight: bold; }
         .badge-Aprobado { background: #d4edda; color: #155724; }
         .badge-Pendiente { background: #fff3cd; color: #856404; }
-
-        .btn-wa {
-            color: white;
-            padding: 6px 12px;
-            text-decoration: none;
-            border-radius: 4px;
-            font-size: 0.85em;
-            display: inline-block;
-            margin-top: 10px;
-            font-weight: bold;
-        }
-
+        .btn-wa { color: white; padding: 6px 12px; text-decoration: none; border-radius: 4px; font-size: 0.85em; display: inline-block; margin-top: 10px; font-weight: bold; }
         .btn-verde { background: #25D366; }
         .btn-naranja { background: #f39c12; }
         .btn-descarga { background: #9b59b6; }
-
-        .filtro-bar {
-            background: white;
-            padding: 15px 20px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-            display: flex;
-            gap: 15px;
-            align-items: center;
-            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
-            border: 1px solid #ddd;
-            flex-wrap: wrap;
-            justify-content: center;
-        }
-
-        .filtro-bar input[type="date"] {
-            padding: 8px;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-            color: #2c3e50;
-            font-family: inherit;
-        }
-
-        .btn-filtro {
-            background: #34495e;
-            color: white;
-            border: none;
-            padding: 9px 20px;
-            border-radius: 4px;
-            cursor: pointer;
-            font-weight: bold;
-            font-size: 0.95em;
-            transition: 0.2s;
-        }
-
+        .filtro-bar { background: white; padding: 15px 20px; border-radius: 8px; margin-bottom: 20px; display: flex; gap: 15px; align-items: center; box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05); border: 1px solid #ddd; flex-wrap: wrap; justify-content: center; }
+        .filtro-bar input[type="date"] { padding: 8px; border: 1px solid #ccc; border-radius: 4px; color: #2c3e50; font-family: inherit; }
+        .btn-filtro { background: #34495e; color: white; border: none; padding: 9px 20px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 0.95em; transition: 0.2s; }
         .btn-filtro:hover { background: #2c3e50; }
-
-        .btn-limpiar {
-            background: #ecf0f1;
-            color: #7f8c8d;
-            text-decoration: none;
-            padding: 9px 15px;
-            border-radius: 4px;
-            font-size: 0.9em;
-            border: 1px solid #ccc;
-            transition: 0.2s;
-            font-weight: bold;
-        }
-
-        .btn-limpiar:hover {
-            background: #e0e6ed;
-            color: #2c3e50;
-        }
-
-        .bosquejo-info {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            margin: 5px 0;
-            flex-wrap: wrap;
-        }
-
-        .dist-center {
-            max-width: 1200px;
-            margin: 20px auto;
-            background: white;
-            padding: 15px;
-            border-radius: 8px;
-            border: 1px solid #ddd;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: 10px;
-        }
-
-        .qr-popover {
-            position: absolute;
-            background: white;
-            border: 2px solid #34495e;
-            padding: 15px;
-            border-radius: 10px;
-            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
-            z-index: 100;
-            text-align: center;
-        }
+        .btn-limpiar { background: #ecf0f1; color: #7f8c8d; text-decoration: none; padding: 9px 15px; border-radius: 4px; font-size: 0.9em; border: 1px solid #ccc; transition: 0.2s; font-weight: bold; }
+        .btn-limpiar:hover { background: #e0e6ed; color: #2c3e50; }
+        .bosquejo-info { display: flex; align-items: center; gap: 10px; margin: 5px 0; flex-wrap: wrap; }
+        .dist-center { max-width: 1200px; margin: 20px auto; background: white; padding: 15px; border-radius: 8px; border: 1px solid #ddd; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; }
+        .qr-popover { position: absolute; background: white; border: 2px solid #34495e; padding: 15px; border-radius: 10px; box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2); z-index: 100; text-align: center; }
 
         @media (max-width: 768px) {
-            .header a {
-                display: block !important;
-                margin: 10px auto !important;
-                padding: 12px !important;
-                background-color: rgba(255, 255, 255, 0.15) !important;
-                border-radius: 8px !important;
-                width: 90% !important;
-                box-sizing: border-box !important;
-                text-decoration: none !important;
-                text-align: center;
-            }
-            .filtro-bar {
-                flex-direction: column;
-                align-items: stretch;
-            }
-            .filtro-bar div {
-                display: flex;
-                justify-content: space-between;
-                width: 100%;
-            }
-            .filtro-bar .btn-filtro,
-            .filtro-bar .btn-limpiar,
-            .filtro-bar a[target="_blank"] {
-                width: 100%;
-                text-align: center;
-                box-sizing: border-box;
-                margin: 5px 0 0 0 !important;
-            }
-            .dist-center {
-                flex-direction: column;
-                text-align: center;
-            }
-            .dist-center div {
-                justify-content: center;
-                flex-wrap: wrap;
-                width: 100%;
-            }
-            .dist-center button {
-                width: 100%;
-                margin-bottom: 5px;
-            }
+            .header a { display: block !important; margin: 10px auto !important; padding: 12px !important; background-color: rgba(255, 255, 255, 0.15) !important; border-radius: 8px !important; width: 90% !important; box-sizing: border-box !important; text-decoration: none !important; text-align: center; }
+            .filtro-bar { flex-direction: column; align-items: stretch; }
+            .filtro-bar div { display: flex; justify-content: space-between; width: 100%; }
+            .filtro-bar .btn-filtro, .filtro-bar .btn-limpiar, .filtro-bar a[target="_blank"] { width: 100%; text-align: center; box-sizing: border-box; margin: 5px 0 0 0 !important; }
+            .dist-center { flex-direction: column; text-align: center; }
+            .dist-center div { justify-content: center; flex-wrap: wrap; width: 100%; }
+            .dist-center button { width: 100%; margin-bottom: 5px; }
         }
     </style>
 </head>
@@ -398,11 +229,9 @@ $salidas = $stmt_sal->fetchAll(PDO::FETCH_ASSOC);
                 const urlBase = window.location.origin + window.location.pathname.replace('control_arreglos.php', 'vista_servicio.php');
                 return urlBase + '?cong_id=' + idCong;
             }
-
             function toggleQR() {
                 const area = document.getElementById('qr-area');
                 const img = document.getElementById('qr-img');
-
                 if (area.style.display === 'none') {
                     const url = getServiceURL();
                     const qrApiUrl = "https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=" + encodeURIComponent(url);
@@ -412,7 +241,6 @@ $salidas = $stmt_sal->fetchAll(PDO::FETCH_ASSOC);
                     area.style.display = 'none';
                 }
             }
-
             function copiarEnlaceServicio() {
                 const url = getServiceURL();
                 navigator.clipboard.writeText(url).then(() => {
@@ -425,23 +253,18 @@ $salidas = $stmt_sal->fetchAll(PDO::FETCH_ASSOC);
 
         <form method="GET" class="filtro-bar">
             <label style="font-weight: bold; color: #2c3e50; font-size: 1.1em; margin-right: 10px;">📅 Filtrar Fechas:</label>
-
             <div style="display: flex; align-items: center; gap: 8px;">
                 <label for="desde" style="font-size: 0.9em; color: #555; font-weight: bold;">Desde</label>
                 <input type="date" id="desde" name="desde" value="<?php echo $fecha_desde; ?>">
             </div>
-
             <div style="display: flex; align-items: center; gap: 8px;">
                 <label for="hasta" style="font-size: 0.9em; color: #555; font-weight: bold;">Hasta</label>
                 <input type="date" id="hasta" name="hasta" value="<?php echo $fecha_hasta; ?>">
             </div>
-
             <button type="submit" class="btn-filtro">🔍 Buscar</button>
-
             <?php if (isset($_GET['desde']) || isset($_GET['hasta'])): ?>
                 <a href="control_arreglos.php" class="btn-limpiar">✖ Limpiar</a>
             <?php endif; ?>
-
             <a href="generar_pdf_anuncios.php?desde=<?php echo $fecha_desde; ?>&hasta=<?php echo $fecha_hasta; ?>"
                 target="_blank"
                 style="background: #e67e22; color: white; text-decoration: none; padding: 9px 20px; border-radius: 4px; font-weight: bold; margin-left: auto; box-shadow: 0 2px 4px rgba(230,126,34,0.3);">
@@ -454,18 +277,17 @@ $salidas = $stmt_sal->fetchAll(PDO::FETCH_ASSOC);
                 🔒 ¡Acción Denegada! Ya hay un arreglo APROBADO (Verde) para esta fecha. Debes cancelarlo primero.
             </div>
         <?php endif; ?>
-
         <?php if (isset($_GET['exito']) && $_GET['exito'] == 'actualizado'): ?>
             <div style="background: #f39c12; color: white; padding: 15px; border-radius: 8px; margin-bottom: 20px; text-align: center; font-weight: bold;">
                 🔄 ¡Arreglo actualizado! El orador anterior fue reemplazado por el nuevo correctamente.
             </div>
         <?php endif; ?>
-
         <?php if (isset($_GET['exito']) && $_GET['exito'] == 'nuevo'): ?>
             <div style="background: #27ae60; color: white; padding: 15px; border-radius: 8px; margin-bottom: 20px; text-align: center; font-weight: bold;">
                 ✅ ¡Solicitud guardada correctamente en un día libre!
             </div>
         <?php endif; ?>
+
         <div class="panel-grid">
             <div>
                 <h2 class="seccion-titulo bg-entradas">📥 Programa en mi Salón</h2>
@@ -483,17 +305,14 @@ $salidas = $stmt_sal->fetchAll(PDO::FETCH_ASSOC);
                                 <p style="margin: 0 0 5px 0; font-size: 1.1em; color: #2c3e50;">
                                     <strong><?php echo htmlspecialchars($e['orador_nombre'] . " " . $e['orador_apellido']); ?></strong>
                                 </p>
-
                                 <p style="margin: 0; font-size: 0.9em; color: #555;">
                                     <?php echo $es_local ? '🏠 Orador Local' : 'De: Cong. ' . htmlspecialchars($e['cong_origen']); ?>
                                 </p>
-
                                 <div class="bosquejo-info">
                                     <span style="font-size: 0.9em;">Bosquejo N° <?php echo $e['numero_discurso']; ?></span>
                                     <?php if (!empty($e['cancion'])): ?>
                                         <span style="font-size: 0.85em; color: #8e44ad; background: #f4ecf7; padding: 2px 8px; border-radius: 12px; font-weight: bold;">🎵 Cant. <?php echo $e['cancion']; ?></span>
                                     <?php endif; ?>
-
                                     <?php if (!empty($e['ruta_archivo'])): ?>
                                         <a href="<?php echo htmlspecialchars($e['ruta_archivo']); ?>" download class="btn-wa btn-descarga">📦 Bajar RAR</a>
                                     <?php endif; ?>
@@ -511,11 +330,14 @@ $salidas = $stmt_sal->fetchAll(PDO::FETCH_ASSOC);
                                     <?php elseif ($e['estado'] == 'Aprobado'): ?>
                                         <?php if (!empty($e['telefono'])):
                                             $num_o = formatearTelefonoWA($e['telefono']);
-                                            $h_f = date("h:i A", strtotime($e['hora']));
                                             $link_gps = "https://www.google.com/maps?q=" . $mi_cong['latitud'] . "," . $mi_cong['longitud'];
                                             $txt_cancion = !empty($e['cancion']) ? " y la canción que selecciono usted es la N° " . $e['cancion'] . " para el cántico Inicial" : "";
+                                            
+                                            // INYECCIÓN DINÁMICA DE DÍA Y HORA DEL PERFIL LOCAL
+                                            $dia_reunion_txt = !empty($mi_cong['dia_reunion']) ? $mi_cong['dia_reunion'] . " " : "";
+                                            $hora_reunion_txt = !empty($mi_cong['hora_reunion']) ? date("h:i A", strtotime($mi_cong['hora_reunion'])) : date("h:i A", strtotime($e['hora']));
 
-                                            $txt_o = rawurlencode("Hola hermano " . $e['orador_nombre'] . ".\n\nLo esperamos en " . $mi_cong['nombre'] . " el " . date("d/m", strtotime($e['fecha'])) . " a las " . $h_f . ".\n\nTendrá el bosquejo N° " . $e['numero_discurso'] . $txt_cancion . ".\n\n📍 Dirección: " . $mi_cong['ubicacion_texto'] . "\n🌍 GPS: " . $link_gps . "\n\n¿Usará imágenes? ¿Necesitará hospedaje o comida?");
+                                            $txt_o = rawurlencode("Hola hermano " . $e['orador_nombre'] . ".\n\nLo esperamos en " . $mi_cong['nombre'] . " el " . $dia_reunion_txt . date("d/m", strtotime($e['fecha'])) . " a las " . $hora_reunion_txt . ".\n\nTendrá el bosquejo N° " . $e['numero_discurso'] . $txt_cancion . ".\n\n📍 Dirección: " . $mi_cong['ubicacion_texto'] . "\n🌍 GPS: " . $link_gps . "\n\n¿Usará imágenes? ¿Necesitará hospedaje o comida?");
                                             ?>
                                             <a href="https://api.whatsapp.com/send?phone=<?php echo $num_o; ?>&text=<?php echo $txt_o; ?>" target="_blank" class="btn-wa btn-verde">📲 Escribir al Invitado</a>
                                         <?php endif; ?>
@@ -578,7 +400,12 @@ $salidas = $stmt_sal->fetchAll(PDO::FETCH_ASSOC);
                                 </div>
                                 <?php if (!empty($s['telefono'])):
                                     $num_s = formatearTelefonoWA($s['telefono']);
-                                    $txt_s = rawurlencode("Hermano " . $s['orador_nombre'] . ", le recuerdo su salida el " . date("d/m", strtotime($s['fecha'])) . " a " . $s['cong_destino'] . ". Bosquejo N° " . $s['numero_discurso'] . ($s['cancion'] ? " con canción " . $s['cancion'] : "") . ".");
+                                    
+                                    // INYECCIÓN DINÁMICA DE DÍA Y HORA DE LA CONGREGACIÓN DESTINO
+                                    $dia_reunion_dest = !empty($s['dia_reunion']) ? $s['dia_reunion'] . " " : "";
+                                    $hora_reunion_dest = !empty($s['hora_reunion']) ? date("h:i A", strtotime($s['hora_reunion'])) : date("h:i A", strtotime($s['hora']));
+
+                                    $txt_s = rawurlencode("Hermano " . $s['orador_nombre'] . ", le recuerdo su salida el " . $dia_reunion_dest . date("d/m", strtotime($s['fecha'])) . " a las " . $hora_reunion_dest . " a la congregación " . $s['cong_destino'] . ". Bosquejo N° " . $s['numero_discurso'] . ($s['cancion'] ? " con canción " . $s['cancion'] : "") . ".");
                                     ?>
                                     <a href="https://api.whatsapp.com/send?phone=<?php echo $num_s; ?>&text=<?php echo $txt_s; ?>" target="_blank" class="btn-wa btn-verde">📲 Recordar Salida</a>
                                 <?php endif; ?>

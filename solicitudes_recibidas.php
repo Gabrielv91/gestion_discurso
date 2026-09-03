@@ -19,8 +19,9 @@ $stmt->execute([':uid' => $usuario_id]);
 $mi_cong_id = $stmt->fetchColumn();
 
 // 2. Buscar solicitudes para MIS oradores hechas por OTROS (Solo futuras o de hoy)
+// Se agregaron c.dia_reunion y c.hora_reunion para extraer el horario de la congregación solicitante
 $sql = "SELECT s.id, s.fecha, s.hora, s.estado, o.nombre AS orador_nom, o.apellido AS orador_ape, o.telefono, 
-               s.numero_discurso, c.nombre AS cong_solicitante, c.coord_telefono
+               s.numero_discurso, c.nombre AS cong_solicitante, c.coord_telefono, c.dia_reunion, c.hora_reunion
         FROM solicitudes s
         INNER JOIN oradores o ON s.orador_id = o.id
         INNER JOIN congregaciones c ON s.congregacion_solicitante_id = c.id
@@ -53,267 +54,234 @@ foreach($solicitudes as $s) {
     <link rel="apple-touch-icon" href="icono-192.png">
     
     <style>
-        /* --- ESTILOS GENERALES DE LA VISTA --- */
-        .btn-consulta {
-            background-color: #2ecc71; 
-            color: white;
-            text-decoration: none;
-            text-align: center;
-            border-radius: 6px;
-            padding: 8px 12px;
-            font-weight: bold;
-            display: block;
-            margin-bottom: 8px;
-            transition: 0.3s;
-        }
-        .btn-consulta:hover { background-color: #27ae60; }
+        body { font-family: 'Segoe UI', Tahoma, sans-serif; background: #ecf0f1; margin: 0; color: #333; }
         
-        .tabla-admin { width: 100%; border-collapse: collapse; margin-top: 15px; }
-        .tabla-admin th, .tabla-admin td { padding: 12px; border-bottom: 1px solid #ddd; text-align: left; }
-        .tabla-admin th { background-color: #2c3e50; color: white; }
+        .header { background: #2c3e50; color: white; padding: 20px; text-align: center; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .header h1 { margin: 0; font-size: 1.6em; }
+        .header a { color: #3498db; text-decoration: none; font-weight: bold; }
+
+        .container { max-width: 1200px; margin: 20px auto; padding: 0 15px; }
+        
+        .intro-text { background: white; padding: 15px 20px; border-radius: 8px; margin-bottom: 20px; border-left: 5px solid #3498db; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+        .intro-text h2 { margin-top: 0; color: #2c3e50; font-size: 1.3em; margin-bottom: 5px; }
+        .intro-text p { color: #7f8c8d; margin-bottom: 0; font-size: 0.95em; }
 
         /* =========================================
-           DISEÑO RESPONSIVO: TABLA A TARJETAS
+           DISEÑO DE LISTA (TABLA COMPACTA)
+           ========================================= */
+        .tabla-lista {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+        .tabla-lista th {
+            background: #2c3e50;
+            color: white;
+            padding: 12px 15px;
+            text-align: left;
+            font-size: 0.95em;
+        }
+        .tabla-lista td {
+            padding: 10px 15px;
+            border-bottom: 1px solid #eee;
+            vertical-align: middle;
+            font-size: 0.95em;
+            color: #2c3e50;
+        }
+        .tabla-lista tr:hover { background: #f9f9f9; }
+
+        /* Badges de Estado */
+        .badge {
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 0.85em;
+            font-weight: bold;
+            display: inline-block;
+            text-align: center;
+        }
+        .b-pend { background: #fcf3cf; color: #b9770e; }
+        .b-apro { background: #d5f5e3; color: #1e8449; }
+        .b-rech { background: #fadbd8; color: #c0392b; }
+
+        /* Botones Compactos */
+        .acciones-flex { display: flex; gap: 5px; flex-wrap: wrap; }
+        .btn-lista {
+            padding: 6px 10px;
+            border-radius: 4px;
+            text-decoration: none;
+            font-size: 0.85em;
+            font-weight: bold;
+            display: inline-block;
+            text-align: center;
+            border: none;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        .btn-w { background: #25D366; color: white; }
+        .btn-w:hover { background: #20b858; }
+        .btn-a { background: #27ae60; color: white; }
+        .btn-a:hover { background: #219150; }
+        .btn-r { background: #e74c3c; color: white; }
+        .btn-r:hover { background: #c0392b; }
+        .btn-d { background: #95a5a6; color: white; }
+        .btn-d:hover { background: #7f8c8d; }
+
+        /* =========================================
+           ADAPTACIÓN A TELÉFONO (LISTA ANGOSTA)
            ========================================= */
         @media (max-width: 768px) {
-            header { padding: 15px; }
-            h1 { font-size: 1.5em; margin-bottom: 10px; }
-            main { padding: 10px !important; }
-            .admin-container { padding: 15px 10px; margin: 0; width: 100%; box-sizing: border-box; }
-            
-            /* Forzar que la tabla se comporte como bloques */
-            table, thead, tbody, th, td, tr {
-                display: block;
-                width: 100%;
-                box-sizing: border-box;
+            .tabla-lista thead { display: none; }
+            .tabla-lista, .tabla-lista tbody, .tabla-lista tr, .tabla-lista td { 
+                display: block; width: 100%; box-sizing: border-box; 
             }
             
-            /* Ocultar el encabezado clásico de la tabla */
-            thead tr {
-                display: none;
-            }
-            
-            /* Estilo de Tarjeta para cada fila */
-            tr {
+            .tabla-lista tr {
+                display: grid;
+                grid-template-areas:
+                    "fecha estado"
+                    "orador orador"
+                    "tema cong"
+                    "acciones acciones";
+                gap: 4px;
+                padding: 12px;
+                border: 1px solid #ddd;
+                margin-bottom: 12px;
+                border-radius: 8px;
                 background: white;
-                margin-bottom: 20px;
-                border-radius: 12px;
-                box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-                padding: 15px;
-                border: 1px solid #ecf0f1;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.03);
             }
             
-            /* Estilo de cada celda dentro de la tarjeta */
-            td {
-                text-align: right;
-                padding: 10px 0;
-                position: relative;
-                border: none;
-                border-bottom: 1px solid #f9f9f9;
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                font-size: 0.95em;
-            }
+            .tabla-lista td { padding: 0; border: none; }
             
-            /* Quitar borde a la última celda (la de los botones) */
-            td:last-child {
-                border-bottom: none;
-                flex-direction: column; 
-                gap: 10px;
-                margin-top: 15px;
-                padding-bottom: 0;
-            }
+            .m-fecha { grid-area: fecha; color: #7f8c8d; font-size: 0.9em; display: flex; align-items: center; gap: 5px; }
+            .m-fecha br { display: none; }
             
-            /* Usar el atributo data-label como título a la izquierda */
-            td::before {
-                content: attr(data-label);
-                font-weight: bold;
-                color: #7f8c8d;
-                text-align: left;
-                flex: 1; /* El título toma el espacio necesario */
-            }
-
-            /* Estilos específicos para los contenedores de botones en móvil */
-            .acciones-grupo {
-                display: flex !important;
-                flex-direction: column !important;
-                align-items: stretch !important;
-                gap: 10px !important;
-                width: 100%;
-            }
+            .m-estado { grid-area: estado; text-align: right; }
+            .m-orador { grid-area: orador; font-size: 1.15em; color: #2c3e50; padding: 4px 0 !important; }
+            .m-tema { grid-area: tema; font-size: 0.9em; color: #555; }
+            .m-cong { grid-area: cong; font-size: 0.9em; color: #555; text-align: right; }
             
-            .botones-decision {
-                display: flex !important;
-                flex-direction: row !important;
-                gap: 10px !important;
-                width: 100% !important;
-            }
-
-            /* Hacer que los botones sean anchos y cómodos */
-            .btn-consulta, .btn-aprobar, .btn-rechazar {
-                width: 100% !important;
-                box-sizing: border-box !important;
-                padding: 14px 10px !important;
-                font-size: 1.05em !important;
-                text-align: center !important;
-                border-radius: 8px !important;
-                margin: 0 !important;
-                display: block;
-            }
+            .m-acciones { grid-area: acciones; margin-top: 8px; border-top: 1px dashed #eee; padding-top: 10px !important; }
+            
+            .acciones-flex { display: flex; flex-direction: column; gap: 8px; }
+            .btn-lista { width: 100%; padding: 12px; font-size: 0.95em; }
+            
+            .duo-btn { display: flex; gap: 8px; width: 100%; }
+            .duo-btn .btn-lista { flex: 1; margin: 0; }
         }
     </style>
 </head>
 <body>
-    <header style="background: #2c3e50; color: white; padding: 20px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
-        <h1 style="margin:0;">Solicitudes Recibidas</h1>
-        <p style="margin: 5px 0 0 0;"><a href="dashboard.php" style="color: #3498db; text-decoration: none; font-weight: bold;">⬅ Volver al Panel</a></p>
+    <header class="header">
+        <h1>Solicitudes Recibidas</h1>
+        <p style="margin: 5px 0 0 0;"><a href="dashboard.php">⬅ Volver al Panel</a></p>
     </header>
 
-    <main style="padding: 20px; max-width: 1000px; margin: 0 auto;">
-        <div class="admin-container" style="background: white; padding: 25px; border-radius: 12px; box-shadow: 0 5px 15px rgba(0,0,0,0.05);">
-            <h2 style="margin-top: 0; color: #2c3e50; border-bottom: 2px solid #ecf0f1; padding-bottom: 10px;">Peticiones de otras congregaciones</h2>
-            <p style="color: #7f8c8d;">Aquí aparecen los hermanos que te han solicitado para dar discursos fuera (Eventos próximos).</p>
-
-            <?php if (count($solicitudes) > 0): ?>
-                <div style="overflow-x: auto; padding-bottom: 15px;">
-                    <table class="tabla-admin">
-                        <thead>
-                            <tr>
-                                <th>Fecha/Hora</th>
-                                <th>Orador</th>
-                                <th>Tema</th>
-                                <th>Solicita</th>
-                                <th>Estado</th>
-                                <th>Acciones</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php foreach ($solicitudes as $s): 
-                                
-                                // Formateo común
-                                $fecha_formateada = date("d/m/Y", strtotime($s['fecha']));
-                                $hora_formateada = date("H:i", strtotime($s['hora']));
-                                
-                                // Limpieza del número de WhatsApp
-                                $numero_wa = preg_replace('/[^0-9]/', '', $s['telefono']); 
-                                if (strlen($numero_wa) > 0 && substr($numero_wa, 0, 2) != '58') {
-                                    if (substr($numero_wa, 0, 1) == '0') {
-                                        $numero_wa = '58' . substr($numero_wa, 1);
-                                    } else {
-                                        $numero_wa = '58' . $numero_wa;
-                                    }
-                                }
-
-                                // ---------------------------------------------------------
-                                // 1. TEXTO PARA CUANDO ESTÁ PENDIENTE (Preguntar disponibilidad)
-                                // ---------------------------------------------------------
-                                $texto_wa_consulta = "✋ ¡Hola, hermano " . trim($s['orador_nom']) . "!\n";
-                                $texto_wa_consulta .= "La congregación *" . trim($s['cong_solicitante']) . "* nos envió una solicitud para que usted dé el discurso B-" . $s['numero_discurso'] . ".\n\n";
-                                $texto_wa_consulta .= "📅 *Fecha:* " . $fecha_formateada . "\n";
-                                $texto_wa_consulta .= "⏰ *Hora:* " . $hora_formateada . "\n\n";
-                                $texto_wa_consulta .= "¿Estaría usted disponible en esa fecha para que yo confirme la solicitud en el sistema?";
-                                
-                                $enlace_wa_consulta = "https://api.whatsapp.com/send?phone=" . $numero_wa . "&text=" . urlencode($texto_wa_consulta);
-
-                                // ---------------------------------------------------------
-                                // 2. TEXTO PARA CUANDO YA ESTÁ APROBADO (Confirmación Final)
-                                // ---------------------------------------------------------
-                                $texto_wa_aprobado = "✋ ¡Hola, hermano " . trim($s['orador_nom']) . "!\n";
-                                $texto_wa_aprobado .= "Le confirmamos oficialmente su discurso público en la congregación *" . trim($s['cong_solicitante']) . "*.\n\n";
-                                $texto_wa_aprobado .= "📅 *Fecha:* " . $fecha_formateada . "\n";
-                                $texto_wa_aprobado .= "⏰ *Hora:* " . $hora_formateada . "\n";
-                                $texto_wa_aprobado .= "📖 *Bosquejo:* B-" . $s['numero_discurso'] . "\n\n";
-                                $texto_wa_aprobado .= "¡Que Jehová bendiga sus esfuerzos!";
-                                
-                                $enlace_wa_aprobado = "https://api.whatsapp.com/send?phone=" . $numero_wa . "&text=" . urlencode($texto_wa_aprobado);
-                            ?>
-                                <tr>
-                                    <td data-label="Fecha/Hora"><?php echo $fecha_formateada . " <br> <small style='color:#7f8c8d;'>" . $hora_formateada . "</small>"; ?></td>
-                                    <td data-label="Orador"><strong><?php echo htmlspecialchars($s['orador_nom'] . " " . $s['orador_ape']); ?></strong></td>
-                                    <td data-label="Tema">B-<?php echo htmlspecialchars($s['numero_discurso']); ?></td>
-                                    <td data-label="Solicita"><?php echo htmlspecialchars($s['cong_solicitante']); ?></td>
-                                    <td data-label="Estado">
-                                        <span style="font-weight: bold; padding: 4px 10px; border-radius: 20px; font-size: 0.85em;
-                                            background-color: <?php echo ($s['estado'] == 'Pendiente') ? '#fcf3cf' : ($s['estado'] == 'Aprobado' ? '#d5f5e3' : '#fadbd8'); ?>;
-                                            color: <?php echo ($s['estado'] == 'Pendiente') ? '#b9770e' : ($s['estado'] == 'Aprobado' ? '#1e8449' : '#c0392b'); ?>;">
-                                            <?php echo htmlspecialchars($s['estado']); ?>
-                                        </span>
-                                    </td>
-                                    <td data-label="Acciones">
-                                        
-                                        <?php if ($s['estado'] == 'Pendiente'): ?>
-                                            <div class="acciones-grupo">
-                                                <a href="<?php echo $enlace_wa_consulta; ?>" target="_blank" class="btn-consulta">
-                                                    💬 1. Preguntar a Orador
-                                                </a>
-                                                
-                                                <div class="botones-decision">
-                                                    <a href="procesar_respuesta_solicitud.php?id=<?php echo $s['id']; ?>&accion=Aprobado" 
-                                                       class="btn-aprobar" 
-                                                       style="flex: 1; text-decoration: none; text-align: center; margin: 0; background-color:#27ae60; color:white; font-weight:bold;">✅ Aprobar</a>
-                                                       
-                                                    <a href="procesar_respuesta_solicitud.php?id=<?php echo $s['id']; ?>&accion=Rechazado" 
-                                                       class="btn-rechazar" 
-                                                       style="flex: 1; text-decoration: none; text-align: center; margin: 0; background-color:#e74c3c; color:white; font-weight:bold;" 
-                                                       onclick="return confirm('¿Rechazar esta solicitud?');">❌ Rechazar</a>
-                                                </div>
-                                            </div>
-
-                                        <?php elseif ($s['estado'] == 'Aprobado'): ?>
-                                            <div class="acciones-grupo">
-                                                <a href="<?php echo $enlace_wa_aprobado; ?>" 
-                                                   target="_blank" 
-                                                   class="btn-aprobar" 
-                                                   style="text-decoration: none; text-align: center; margin: 0; background-color: #25D366; color: white; font-weight:bold;">
-                                                   📲 Enviar Confirmación
-                                                </a>
-                                                <a href="procesar_respuesta_solicitud.php?id=<?php echo $s['id']; ?>&accion=Pendiente" 
-                                                   class="btn-rechazar" 
-                                                   style="text-decoration: none; text-align: center; margin: 0; background-color: #95a5a6; color:white; font-weight:bold;" 
-                                                   onclick="return confirm('¿Seguro que deseas anular esta aprobación y devolverla a Pendiente?');">Deshacer a Pendiente</a>
-                                            </div>
-
-                                        <?php elseif ($s['estado'] == 'Rechazado'): ?>
-                                            <div class="acciones-grupo">
-                                                <a href="procesar_respuesta_solicitud.php?id=<?php echo $s['id']; ?>&accion=Pendiente" 
-                                                   class="btn-rechazar" 
-                                                   style="text-decoration: none; text-align: center; margin: 0; background-color: #95a5a6; color:white; font-weight:bold;" 
-                                                   onclick="return confirm('¿Seguro que deseas anular este rechazo y devolverlo a Pendiente?');">Deshacer a Pendiente</a>
-                                            </div>
-                                        <?php endif; ?>
-                                        
-                                    </td>
-                                </tr>
-                            <?php endforeach; ?>
-                        </tbody>
-                    </table>
-                </div>
-            <?php else: ?>
-                <div style="background: #fdfdfd; border: 2px dashed #bdc3c7; padding: 40px 20px; text-align: center; border-radius: 12px; color: #7f8c8d; margin-top: 20px;">
-                    <h3 style="margin-top: 0;">Todo está al día</h3>
-                    <p style="margin-bottom: 0;">No tienes solicitudes pendientes ni futuras de otras congregaciones por ahora.</p>
-                </div>
-            <?php endif; ?>
+    <main class="container">
+        <div class="intro-text">
+            <h2>Peticiones de otras congregaciones</h2>
+            <p>Hermanos que te han solicitado para dar discursos fuera (Eventos próximos).</p>
         </div>
+
+        <?php if (count($solicitudes) > 0): ?>
+            <table class="tabla-lista">
+                <thead>
+                    <tr>
+                        <th>Fecha / Hora</th>
+                        <th>Orador</th>
+                        <th>Tema</th>
+                        <th>Congregación</th>
+                        <th>Estado</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php foreach ($solicitudes as $s): 
+                        
+                        // Formateo común de fecha
+                        $fecha_formateada = date("d/m/Y", strtotime($s['fecha']));
+                        
+                        // INYECCIÓN DINÁMICA DEL DÍA Y HORA DEL PERFIL DE LA CONGREGACIÓN SOLICITANTE
+                        $dia_reunion_sol = !empty($s['dia_reunion']) ? $s['dia_reunion'] . " " : "";
+                        $hora_reunion_sol = !empty($s['hora_reunion']) ? date("h:i A", strtotime($s['hora_reunion'])) : date("h:i A", strtotime($s['hora']));
+                        
+                        // Limpieza del número de WhatsApp
+                        $numero_wa = preg_replace('/[^0-9]/', '', $s['telefono']); 
+                        if (strlen($numero_wa) > 0 && substr($numero_wa, 0, 2) != '58') {
+                            $numero_wa = (substr($numero_wa, 0, 1) == '0') ? '58' . substr($numero_wa, 1) : '58' . $numero_wa;
+                        }
+
+                        // Textos WhatsApp Integrando el día y la hora real
+                        $texto_wa_consulta = "✋ ¡Hola, hermano " . trim($s['orador_nom']) . "!\nLa congregación *" . trim($s['cong_solicitante']) . "* nos envió una solicitud para que usted dé el discurso B-" . $s['numero_discurso'] . ".\n\n📅 *Fecha:* " . $dia_reunion_sol . $fecha_formateada . "\n⏰ *Hora:* " . $hora_reunion_sol . "\n\n¿Estaría usted disponible en esa fecha para que yo confirme la solicitud en el sistema?";
+                        $enlace_wa_consulta = "https://api.whatsapp.com/send?phone=" . $numero_wa . "&text=" . urlencode($texto_wa_consulta);
+
+                        $texto_wa_aprobado = "✋ ¡Hola, hermano " . trim($s['orador_nom']) . "!\nLe confirmamos oficialmente su discurso público en la congregación *" . trim($s['cong_solicitante']) . "*.\n\n📅 *Fecha:* " . $dia_reunion_sol . $fecha_formateada . "\n⏰ *Hora:* " . $hora_reunion_sol . "\n📖 *Bosquejo:* B-" . $s['numero_discurso'] . "\n\n¡Que Jehová bendiga sus esfuerzos!";
+                        $enlace_wa_aprobado = "https://api.whatsapp.com/send?phone=" . $numero_wa . "&text=" . urlencode($texto_wa_aprobado);
+                        
+                        // Determinación de clase de color para estado
+                        $clase_estado = 'b-pend';
+                        if ($s['estado'] == 'Aprobado') $clase_estado = 'b-apro';
+                        if ($s['estado'] == 'Rechazado') $clase_estado = 'b-rech';
+                    ?>
+                        <tr>
+                            <td class="m-fecha">
+                                <strong><?php echo $fecha_formateada; ?></strong>
+                                <br><small>⏰ <?php echo $hora_reunion_sol; ?></small>
+                            </td>
+                            <td class="m-orador"><strong><?php echo htmlspecialchars($s['orador_nom'] . " " . $s['orador_ape']); ?></strong></td>
+                            <td class="m-tema">B-<?php echo htmlspecialchars($s['numero_discurso']); ?></td>
+                            <td class="m-cong"><?php echo htmlspecialchars($s['cong_solicitante']); ?></td>
+                            <td class="m-estado">
+                                <span class="badge <?php echo $clase_estado; ?>"><?php echo htmlspecialchars($s['estado']); ?></span>
+                            </td>
+                            <td class="m-acciones">
+                                <div class="acciones-flex">
+                                    <?php if ($s['estado'] == 'Pendiente'): ?>
+                                        <a href="<?php echo $enlace_wa_consulta; ?>" target="_blank" class="btn-lista btn-w">💬 1. Preguntar</a>
+                                        <div class="duo-btn">
+                                            <a href="procesar_respuesta_solicitud.php?id=<?php echo $s['id']; ?>&accion=Aprobado" class="btn-lista btn-a">✅ Aprobar</a>
+                                            <a href="procesar_respuesta_solicitud.php?id=<?php echo $s['id']; ?>&accion=Rechazado" class="btn-lista btn-r" onclick="return confirm('¿Rechazar esta solicitud?');">❌ Rechazar</a>
+                                        </div>
+
+                                    <?php elseif ($s['estado'] == 'Aprobado'): ?>
+                                        <a href="<?php echo $enlace_wa_aprobado; ?>" target="_blank" class="btn-lista btn-w">📲 Enviar Confirmación</a>
+                                        <a href="procesar_respuesta_solicitud.php?id=<?php echo $s['id']; ?>&accion=Pendiente" class="btn-lista btn-d" onclick="return confirm('¿Seguro que deseas anular esta aprobación y devolverla a Pendiente?');">↩️ Deshacer</a>
+
+                                    <?php elseif ($s['estado'] == 'Rechazado'): ?>
+                                        <a href="procesar_respuesta_solicitud.php?id=<?php echo $s['id']; ?>&accion=Pendiente" class="btn-lista btn-d" onclick="return confirm('¿Seguro que deseas anular este rechazo y devolverlo a Pendiente?');">↩️ Deshacer a Pendiente</a>
+                                    <?php endif; ?>
+                                </div>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+        <?php else: ?>
+            <div style="background: white; border: 2px dashed #bdc3c7; padding: 40px 20px; text-align: center; border-radius: 8px; color: #7f8c8d;">
+                <h3 style="margin-top: 0; font-size: 1.3em; color: #2c3e50;">Todo está al día</h3>
+                <p style="margin-bottom: 0;">No tienes solicitudes pendientes ni futuras de otras congregaciones por ahora.</p>
+            </div>
+        <?php endif; ?>
     </main>
 
     <script>
-        // 1. Registra el motor en segundo plano
+        // Funciones en segundo plano para notificaciones push
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
                 navigator.serviceWorker.register('sw.js');
             });
         }
 
-        // 2. Pide permiso al teléfono para vibrar y mostrar alertas
         document.addEventListener('DOMContentLoaded', () => {
             if ('Notification' in window && Notification.permission !== 'granted' && Notification.permission !== 'denied') {
                 Notification.requestPermission();
             }
         });
 
-        // 3. El Radar: Pregunta a la base de datos cada 30 segundos
+        // Verificador de nuevas notificaciones (El Radar)
         setInterval(verificarNuevasSolicitudes, 30000); 
         let cantidadPendientesAnterior = <?php echo $pendientes_actuales; ?>;
 
@@ -322,8 +290,6 @@ foreach($solicitudes as $s) {
                 .then(response => response.json())
                 .then(data => {
                     let nuevasPendientes = parseInt(data.total_pendientes);
-                    
-                    // Si entra una solicitud nueva, Lanza la notificación del celular
                     if (nuevasPendientes > cantidadPendientesAnterior && nuevasPendientes > 0) {
                         if (Notification.permission === 'granted') {
                             navigator.serviceWorker.ready.then(function(registro) {
@@ -335,10 +301,9 @@ foreach($solicitudes as $s) {
                                 });
                             });
                         }
-                        // Actualiza la página automáticamente para mostrar la nueva fila
+                        // Refresca la vista para ver el nuevo bloque de la lista
                         setTimeout(() => { window.location.reload(); }, 2000);
                     }
-                    
                     cantidadPendientesAnterior = nuevasPendientes;
                 })
                 .catch(error => console.error('Error revisando notificaciones:', error));

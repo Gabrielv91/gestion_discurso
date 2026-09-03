@@ -22,6 +22,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['form_perfil'])) {
     $sql_update = "UPDATE congregaciones SET 
                     nombre = :nombre,
                     ubicacion_texto = :ubicacion,
+                    dia_reunion = :dia_reunion,
+                    hora_reunion = :hora_reunion,
                     latitud = :latitud,
                     longitud = :longitud,
                     coord_nombre = :coord_nombre,
@@ -33,6 +35,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['form_perfil'])) {
     $exito = $stmt_up->execute([
         ':nombre' => $_POST['nombre'],
         ':ubicacion' => $_POST['ubicacion'],
+        ':dia_reunion' => $_POST['dia_reunion'],
+        ':hora_reunion' => $_POST['hora_reunion'],
         ':latitud' => $_POST['latitud'],
         ':longitud' => $_POST['longitud'],
         ':coord_nombre' => $nombre_completo,
@@ -89,8 +93,8 @@ $lng_defecto = !empty($perfil['longitud']) ? $perfil['longitud'] : '-70.2144';
         .full-width { grid-column: 1 / -1; }
         
         label { display: block; font-weight: bold; color: #34495e; margin-bottom: 5px; font-size: 0.9em; }
-        input[type="text"], input[type="email"] { width: 100%; padding: 10px; border: 1px solid #bdc3c7; border-radius: 6px; font-size: 1em; box-sizing: border-box; background: #fdfdfd; transition: border 0.3s; }
-        input:focus { border-color: #3498db; outline: none; background: #fff; }
+        input[type="text"], input[type="email"], input[type="time"], select { width: 100%; padding: 10px; border: 1px solid #bdc3c7; border-radius: 6px; font-size: 1em; box-sizing: border-box; background: #fdfdfd; transition: border 0.3s; }
+        input:focus, select:focus { border-color: #3498db; outline: none; background: #fff; }
         
         .btn-submit { background: #2980b9; color: white; border: none; padding: 12px 20px; font-size: 1.1em; border-radius: 6px; cursor: pointer; width: 100%; font-weight: bold; transition: 0.3s; margin-top: 20px; }
         .btn-submit:hover { background: #1f618d; }
@@ -131,6 +135,27 @@ $lng_defecto = !empty($perfil['longitud']) ? $perfil['longitud'] : '-70.2144';
                     <div class="full-width">
                         <label>Ubicación (Dirección en texto):</label>
                         <input type="text" name="ubicacion" value="<?php echo htmlspecialchars($perfil['ubicacion_texto'] ?? ''); ?>" required>
+                    </div>
+                </div>
+
+                <div class="seccion-titulo">🕒 Horario de Reunión</div>
+                <div class="form-grid">
+                    <div>
+                        <label>Día de Reunión:</label>
+                        <select name="dia_reunion">
+                            <option value="">-- Seleccione --</option>
+                            <?php 
+                            $dias = ['Sábado', 'Domingo'];
+                            foreach($dias as $d){
+                                $sel = (isset($perfil['dia_reunion']) && $perfil['dia_reunion'] == $d) ? 'selected' : '';
+                                echo "<option value='$d' $sel>$d</option>";
+                            }
+                            ?>
+                        </select>
+                    </div>
+                    <div>
+                        <label>Hora de Reunión:</label>
+                        <input type="time" name="hora_reunion" value="<?php echo htmlspecialchars($perfil['hora_reunion'] ?? ''); ?>" required>
                     </div>
                 </div>
 
